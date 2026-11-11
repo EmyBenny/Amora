@@ -1,0 +1,42 @@
+name: amora_dating_app
+description: "A modern cross-platform mobile application for dating and matching lovers."
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # UI & Components
+  flutter_card_swiper: ^7.0.1
+  google_fonts: ^6.2.1
+  lucide_icons: ^0.257.0
+  cached_network_image: ^3.3.1
+  confetti: ^0.7.0
+  provider: ^6.1.2
+  intl: ^0.19.0
+  flutter_animate: ^4.5.0
+
+  # Authentication & Secure Credential Storage
+  firebase_core: ^3.1.0
+  firebase_auth: ^5.1.0
+  google_sign_in: ^6.2.1
+  flutter_facebook_auth: ^7.1.1
+  flutter_secure_storage: ^9.2.2
+
+  # Media, Notifications & Profile Management
+  image_picker: ^1.1.2
+  audioplayers: ^6.0.0
+  flutter_local_notifications: ^17.1.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
