@@ -1,12 +1,45 @@
 export interface FlutterCodeFile {
   path: string;
   filename: string;
-  language: 'dart' | 'yaml';
+  language: 'dart' | 'yaml' | 'markdown';
   description: string;
   content: string;
 }
 
 export const FLUTTER_CODEBASE: FlutterCodeFile[] = [
+  {
+    path: 'README.md',
+    filename: 'README.md',
+    language: 'markdown',
+    description: 'Project architecture, matching algorithm steps & Flutter run guide',
+    content: `# Amora — Cross-Platform Dating & Matchmaking Mobile App
+
+A modern, mobile-first dating and matching platform built with Flutter, Dart, React, and TypeScript. Designed for dating and matching lovers (male and female) with mutual passion scoring, marching band & rhythm harmonies, hardware-level secure authentication, and real-time messaging.
+
+## Quick Start (Flutter CLI)
+\`\`\`bash
+# 1. Create project
+flutter create --org com.amora amora_dating_app
+cd amora_dating_app
+
+# 2. Get dependencies
+flutter pub get
+
+# 3. Run on your target device
+flutter run -d chrome     # Web
+flutter run -d android    # Android device/emulator
+flutter run -d ios        # iOS simulator
+\`\`\`
+
+## Architecture & Core Modules
+1. Matching Algorithm Engine: \`lib/services/matching_algorithm.dart\`
+2. Authentication & Secure Storage: \`lib/services/auth_service.dart\`
+3. Auth Screen (Login / Sign Up / Social): \`lib/screens/auth_screen.dart\`
+4. Profile Editor (Photos, Bio, Interests): \`lib/screens/profile_edit_screen.dart\`
+5. Discovery Deck & Swiper: \`lib/screens/discover_swipe_screen.dart\`
+6. App Entry & Theme: \`lib/main.dart\`
+`,
+  },
   {
     path: 'pubspec.yaml',
     filename: 'pubspec.yaml',
