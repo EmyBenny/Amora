@@ -50,6 +50,17 @@
 - **Interactive Messenger**: Real-time chat bubbles, simulated audio voice notes, and automated replies.
 - **Date Invitation Widget**: Single-tap in-chat date proposal (e.g., "Grab iced cortados at Velvet Coffee on Friday").
 
+### 6. Notification System (`feature/notification-system`)
+- **Domain Categories**:
+  - `new_match`: High-compatibility mutual match alerts with avatar and chemistry percentage.
+  - `message`: Real-time chat message previews and quick conversation navigation.
+  - `super_like`: Priority alerts when a lover super-likes your profile.
+  - `date_invite`: Date rendezvous proposals with time and venue.
+  - `marching_event`: Community rehearsal, parade, and brass festival announcements.
+- **Push & Local Alerts**: Integrated via `flutter_local_notifications` with configurable system notification channels.
+- **Unread & Deep Linking**: Unread count badge on top bar and navigation, mark all read, swipe-to-dismiss, and direct deep-linking to chat or candidate profile.
+- **Granular Preferences**: Independent toggles for match alerts, message alerts, marching events, sound, and vibration.
+
 ---
 
 ## 📂 Repository File Tree
@@ -86,6 +97,7 @@
 │   │   ├── EditProfileModal.tsx          # Full profile editor (photos, bio, interests, preferences)
 │   │   ├── AuthModal.tsx                 # Email/Password, Google & Facebook sign-in modal
 │   │   ├── AlgorithmExplainerModal.tsx   # Detailed match chemistry formula breakdown
+│   │   ├── NotificationsModal.tsx        # In-app notification center & preferences hub
 │   │   ├── MatchCelebrationModal.tsx     # "It's a Match!" celebration modal with confetti
 │   │   ├── ChatView.tsx                  # Interactive messenger with simulated responses
 │   │   ├── ExploreGrid.tsx               # Curated match collections by interest
@@ -101,21 +113,26 @@
 │           └── dating_lovers_hero_*.jpg
 │
 └── flutter_project/                      # Generated Flutter Source Files (also viewable in-app)
-    ├── pubspec.yaml                      # Flutter dependencies and asset configuration
+    ├── pubspec.yaml                      # Flutter dependencies (local_notifications, auth, etc.)
     ├── lib/
     │   ├── main.dart                     # Flutter application entry point & ThemeData
     │   ├── models/
-    │   │   └── lover_profile.dart        # Strongly-typed Dart data classes
+    │   │   ├── lover_profile.dart        # Strongly-typed LoverProfile data classes
+    │   │   └── app_notification.dart     # Notification models & NotificationType enum
     │   ├── services/
     │   │   ├── matching_algorithm.dart   # Pure Dart DatingMatchingEngine class
-    │   │   └── auth_service.dart         # FirebaseAuth, GoogleSignIn, FacebookAuth & SecureStorage
+    │   │   ├── auth_service.dart         # FirebaseAuth, GoogleSignIn, FacebookAuth & SecureStorage
+    │   │   └── notification_service.dart # Notification Provider & LocalNotificationsPlugin
     │   ├── screens/
     │   │   ├── auth_screen.dart          # Tabbed Login / Sign-up UI with social buttons
     │   │   ├── discover_swipe_screen.dart# Flutter CardSwiper with like/pass callbacks
-    │   │   └── profile_edit_screen.dart  # ImagePicker, Bio, Chips & Preference Sliders
+    │   │   ├── profile_edit_screen.dart  # ImagePicker, Bio, Chips & Preference Sliders
+    │   │   └── notifications_screen.dart # Notification center with tabs & swipe dismiss
     │   └── widgets/
     │       ├── swipe_card.dart           # Card presentation with scrims and badge overlays
     │       └── match_dialog.dart         # Mutual attraction celebration dialog
+    └── test/
+        └── notification_service_test.dart# Unit tests for notification stream & unread logic
 ```
 
 ---

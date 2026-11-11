@@ -18,8 +18,9 @@ import { FlutterCodeViewer } from './components/FlutterCodeViewer';
 import { AuthModal } from './components/AuthModal';
 import { EditProfileModal, EditableUserProfile } from './components/EditProfileModal';
 import { AlgorithmExplainerModal } from './components/AlgorithmExplainerModal';
+import { NotificationsModal } from './components/NotificationsModal';
 import { INITIAL_PROFILES, INITIAL_MATCHES, CURRENT_USER } from './data/profiles';
-import { LoverProfile, FilterSettings, ChatThread } from './types';
+import { LoverProfile, FilterSettings, ChatThread, AppNotification, NotificationSettings } from './types';
 import { rankProfiles } from './services/matchingAlgorithm';
 
 export default function App() {
@@ -77,6 +78,64 @@ export default function App() {
   const [isEditProfileOpen, setIsEditProfileOpen] = useState<boolean>(false);
   const [isFilterOpen, setIsFilterOpen] = useState<boolean>(false);
   const [explainingProfile, setExplainingProfile] = useState<LoverProfile | null>(null);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState<boolean>(false);
+
+  // Notification Preferences & In-App notification list
+  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>({
+    pushEnabled: true,
+    matchAlerts: true,
+    messageAlerts: true,
+    marchingAlerts: true,
+    soundEnabled: true,
+    vibrationEnabled: true,
+  });
+
+  const [notifications, setNotifications] = useState<AppNotification[]>([
+    {
+      id: 'notif_1',
+      type: 'new_match',
+      title: 'It\'s a Match with Sophia! 🎉',
+      body: 'You and Sophia liked each other. You both share a 96% rhythm & brass connection.',
+      timestamp: '12m ago',
+      read: false,
+      senderId: 'profile_sophia',
+      senderName: 'Sophia',
+      senderAvatar: '/src/assets/images/profile_sophia_female_1794407594119.jpg',
+      relatedProfileId: 'profile_sophia',
+    },
+    {
+      id: 'notif_2',
+      type: 'message',
+      title: 'New Message from Sophia',
+      body: '"I loved your note about the brass fanfare! When are we checking out that vinyl cafe?"',
+      timestamp: '10m ago',
+      read: false,
+      senderId: 'profile_sophia',
+      senderName: 'Sophia',
+      senderAvatar: '/src/assets/images/profile_sophia_female_1794407594119.jpg',
+      actionRoute: 'chat',
+    },
+    {
+      id: 'notif_3',
+      type: 'marching_event',
+      title: 'Marching Brass Gathering 🎺',
+      body: 'Alumni Marching Ensemble open rehearsal & street cadence jam this Saturday at 4 PM.',
+      timestamp: '2h ago',
+      read: true,
+    },
+    {
+      id: 'notif_4',
+      type: 'super_like',
+      title: 'Super Like from Elena ⭐',
+      body: 'Elena super-liked your profile and loved your note about tenor drum cadences.',
+      timestamp: 'Yesterday',
+      read: true,
+      senderId: 'profile_elena',
+      senderName: 'Elena',
+      senderAvatar: '/src/assets/images/profile_elena_female_1794407596172.jpg',
+      relatedProfileId: 'profile_elena',
+    },
+  ]);
 
   // Profiles stack
   const [profiles, setProfiles] = useState<LoverProfile[]>(INITIAL_PROFILES);
@@ -128,6 +187,22 @@ export default function App() {
 
     if (direction === 'right' || direction === 'super') {
       setMatchedCelebration(profile);
+
+      if (notificationSettings.matchAlerts) {
+        const matchNotif: AppNotification = {
+          id: `notif_match_${Date.now()}`,
+          type: 'new_match',
+          title: `It's a Match with ${profile.name}! 🎉`,
+          body: `You and ${profile.name} liked each other! Start a conversation.`,
+          timestamp: 'Just now',
+          read: false,
+          senderId: profile.id,
+          senderName: profile.name,
+          senderAvatar: profile.photos[0],
+          relatedProfileId: profile.id,
+        };
+        setNotifications((prev) => [matchNotif, ...prev]);
+      }
 
       const existingThread = threads.find((t) => t.profile.id === profile.id);
       if (!existingThread) {
@@ -208,6 +283,23 @@ export default function App() {
               timestamp: 'Just now',
               isMe: false,
             };
+
+            if (notificationSettings.messageAlerts) {
+              const msgNotif: AppNotification = {
+                id: `notif_msg_${Date.now()}`,
+                type: 'message',
+                title: `Message from ${thread.profile.name}`,
+                body: randomReply,
+                timestamp: 'Just now',
+                read: false,
+                senderId: thread.profile.id,
+                senderName: thread.profile.name,
+                senderAvatar: thread.profile.photos[0],
+                actionRoute: 'chat',
+              };
+              setNotifications((prevNotifs) => [msgNotif, ...prevNotifs]);
+            }
+
             return {
               ...thread,
               lastMessage: randomReply,
@@ -314,7 +406,38 @@ export default function App() {
     setLoggedInUser(null);
   };
 
+  const handleMarkNotifAsRead = (id: string) => {
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+    );
+  };
+
+  const handleMarkAllNotifsAsRead = () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  };
+
+  const handleDeleteNotif = (id: string) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  };
+
+  const handleSelectNotification = (notif: AppNotification) => {
+    setIsNotificationsOpen(false);
+    if (notif.actionRoute === 'chat' || notif.type === 'message') {
+      const thread = threads.find((t) => t.profile.id === notif.senderId);
+      if (thread) {
+        setActiveThreadId(thread.id);
+        setActiveTab('matches');
+      }
+    } else if (notif.relatedProfileId) {
+      const p = profiles.find((prof) => prof.id === notif.relatedProfileId);
+      if (p) {
+        setActiveProfileModal(p);
+      }
+    }
+  };
+
   const totalUnreadCount = threads.reduce((acc, t) => acc + t.unreadCount, 0);
+  const unreadNotifsCount = notifications.filter((n) => !n.read).length;
 
   return (
     <div className="min-h-screen bg-stone-100 dark:bg-stone-950 text-stone-900 dark:text-stone-100 flex flex-col font-sans transition-colors duration-200">
@@ -333,6 +456,8 @@ export default function App() {
         setDeviceMode={setDeviceMode}
         onOpenFilter={() => setIsFilterOpen(true)}
         matchesCount={totalUnreadCount}
+        notificationsCount={unreadNotifsCount}
+        onOpenNotifications={() => setIsNotificationsOpen(true)}
       />
 
       {/* Main Content Area */}
@@ -543,6 +668,19 @@ export default function App() {
         currentUserAvatar={currentUserData.photos[0]}
         onClose={() => setMatchedCelebration(null)}
         onOpenChat={handleStartChatFromMatch}
+      />
+
+      {/* Notifications Modal Hub */}
+      <NotificationsModal
+        isOpen={isNotificationsOpen}
+        onClose={() => setIsNotificationsOpen(false)}
+        notifications={notifications}
+        onMarkAsRead={handleMarkNotifAsRead}
+        onMarkAllAsRead={handleMarkAllNotifsAsRead}
+        onDeleteNotification={handleDeleteNotif}
+        onSelectNotification={handleSelectNotification}
+        settings={notificationSettings}
+        onUpdateSettings={setNotificationSettings}
       />
     </div>
   );

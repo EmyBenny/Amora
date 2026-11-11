@@ -1,5 +1,5 @@
 import React from 'react';
-import { Heart, Code2, Smartphone, Moon, Sun, SlidersHorizontal } from 'lucide-react';
+import { Heart, Code2, Smartphone, Moon, Sun, SlidersHorizontal, Bell } from 'lucide-react';
 
 interface TopBarProps {
   activeTab: 'swipe' | 'explore' | 'matches' | 'profile';
@@ -12,6 +12,8 @@ interface TopBarProps {
   setDeviceMode: (mode: 'mobile' | 'pixel' | 'fullscreen') => void;
   onOpenFilter: () => void;
   matchesCount: number;
+  notificationsCount: number;
+  onOpenNotifications: () => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -25,6 +27,8 @@ export const TopBar: React.FC<TopBarProps> = ({
   setDeviceMode,
   onOpenFilter,
   matchesCount,
+  notificationsCount,
+  onOpenNotifications,
 }) => {
   return (
     <header className="sticky top-0 z-40 w-full border-b border-stone-200 dark:border-stone-800 bg-white/95 dark:bg-stone-950/95 backdrop-blur-md">
@@ -147,6 +151,19 @@ export const TopBar: React.FC<TopBarProps> = ({
               <span>Full View</span>
             </button>
           </div>
+
+          {/* Notifications Trigger */}
+          <button
+            onClick={onOpenNotifications}
+            className="relative p-2 text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-white rounded-lg hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+            title="Notifications"
+            aria-label="View notifications"
+          >
+            <Bell className="w-4 h-4" />
+            {notificationsCount > 0 && (
+              <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white dark:ring-stone-950" />
+            )}
+          </button>
 
           {/* Quick Filter trigger */}
           <button

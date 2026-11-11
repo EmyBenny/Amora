@@ -60,3 +60,34 @@ export interface ChatThread {
   messages: ChatMessage[];
   isMatchNew?: boolean;
 }
+
+export type NotificationType =
+  | 'new_match'
+  | 'message'
+  | 'super_like'
+  | 'date_invite'
+  | 'marching_event'
+  | 'chemistry_alert';
+
+export interface AppNotification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  timestamp: string;
+  read: boolean;
+  senderId?: string;
+  senderName?: string;
+  senderAvatar?: string;
+  actionRoute?: string;
+  relatedProfileId?: string;
+}
+
+export interface NotificationSettings {
+  pushEnabled: boolean;
+  matchAlerts: boolean;
+  messageAlerts: boolean;
+  marchingAlerts: boolean;
+  soundEnabled: boolean;
+  vibrationEnabled: boolean;
+}
