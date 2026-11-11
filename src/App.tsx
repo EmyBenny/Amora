@@ -1,0 +1,549 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  Heart,
+  Compass,
+  MessageCircle,
+  User,
+} from 'lucide-react';
+import { TopBar } from './components/TopBar';
+import { DeviceFrame } from './components/DeviceFrame';
+import { SwipeCardDeck } from './components/SwipeCardDeck';
+import { ProfileDetailModal } from './components/ProfileDetailModal';
+import { FilterSheet } from './components/FilterSheet';
+import { MatchCelebrationModal } from './components/MatchCelebrationModal';
+import { ChatView } from './components/ChatView';
+import { ExploreGrid } from './components/ExploreGrid';
+import { UserProfileView } from './components/UserProfileView';
+import { FlutterCodeViewer } from './components/FlutterCodeViewer';
+import { AuthModal } from './components/AuthModal';
+import { EditProfileModal, EditableUserProfile } from './components/EditProfileModal';
+import { AlgorithmExplainerModal } from './components/AlgorithmExplainerModal';
+import { INITIAL_PROFILES, INITIAL_MATCHES, CURRENT_USER } from './data/profiles';
+import { LoverProfile, FilterSettings, ChatThread } from './types';
+import { rankProfiles } from './services/matchingAlgorithm';
+
+export default function App() {
+  // Theme state
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
+
+  // Layout & Navigation state
+  const [activeTab, setActiveTab] = useState<'swipe' | 'explore' | 'matches' | 'profile'>('swipe');
+  const [showFlutterCode, setShowFlutterCode] = useState<boolean>(false);
+  const [deviceMode, setDeviceMode] = useState<'mobile' | 'pixel' | 'fullscreen'>('mobile');
+
+  // Test Persona: 'male' (Liam) or 'female' (Maya)
+  const [currentPersona, setCurrentPersona] = useState<'male' | 'female'>('male');
+
+  // User Profile Data (Editable by user)
+  const [currentUserData, setCurrentUserData] = useState<EditableUserProfile>({
+    id: CURRENT_USER.id,
+    name: CURRENT_USER.name,
+    age: CURRENT_USER.age,
+    gender: CURRENT_USER.gender,
+    headline: CURRENT_USER.headline,
+    bio: CURRENT_USER.bio,
+    photos: CURRENT_USER.photos,
+    passions: CURRENT_USER.passions,
+    marchingLoveInterest: CURRENT_USER.marchingLoveInterest,
+    occupation: CURRENT_USER.occupation,
+    education: CURRENT_USER.education,
+    heightCm: CURRENT_USER.heightCm,
+    loveLanguage: CURRENT_USER.loveLanguage,
+    zodiac: CURRENT_USER.zodiac,
+    preferences: {
+      genderPreference: 'female',
+      ageRange: [21, 35],
+      maxDistanceKm: 25,
+      onlyVerified: false,
+    },
+  });
+
+  // Authentication state (supports Email/Password and Google/Facebook)
+  const [loggedInUser, setLoggedInUser] = useState<{
+    name: string;
+    email: string;
+    avatar?: string;
+  } | null>(() => {
+    try {
+      const stored = localStorage.getItem('amora_auth_session');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  // Modals state
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
+  const [isEditProfileOpen, setIsEditProfileOpen] = useState<boolean>(false);
+  const [isFilterOpen, setIsFilterOpen] = useState<boolean>(false);
+  const [explainingProfile, setExplainingProfile] = useState<LoverProfile | null>(null);
+
+  // Profiles stack
+  const [profiles, setProfiles] = useState<LoverProfile[]>(INITIAL_PROFILES);
+  const [swipedHistory, setSwipedHistory] = useState<LoverProfile[]>([]);
+
+  // Detailed Profile Modal & Celebrations
+  const [activeProfileModal, setActiveProfileModal] = useState<LoverProfile | null>(null);
+  const [matchedCelebration, setMatchedCelebration] = useState<LoverProfile | null>(null);
+  const [threads, setThreads] = useState<ChatThread[]>(INITIAL_MATCHES);
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+
+  // Sync dark class on document element
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [isDarkMode]);
+
+  // Execute Flutter Matching Algorithm to score and rank candidates dynamically
+  const rankedProfiles = useMemo(() => {
+    const scoredList = rankProfiles(currentUserData, profiles);
+    return scoredList
+      .filter(({ breakdown, profile }) => {
+        // Filter by preferences
+        if (currentUserData.preferences.genderPreference !== 'all') {
+          if (profile.gender !== currentUserData.preferences.genderPreference) {
+            return false;
+          }
+        }
+        if (currentUserData.preferences.onlyVerified && !profile.verified) {
+          return false;
+        }
+        if (currentUserData.preferences.passionFilter) {
+          const hasPassion = profile.passions.some((p) =>
+            p.toLowerCase().includes(currentUserData.preferences.passionFilter!.toLowerCase())
+          );
+          if (!hasPassion) return false;
+        }
+        return breakdown.isHardMatch;
+      })
+      .map((item) => item.profile);
+  }, [currentUserData, profiles]);
+
+  const handleSwipe = (profile: LoverProfile, direction: 'left' | 'right' | 'super') => {
+    setProfiles((prev) => prev.filter((p) => p.id !== profile.id));
+    setSwipedHistory((prev) => [profile, ...prev]);
+
+    if (direction === 'right' || direction === 'super') {
+      setMatchedCelebration(profile);
+
+      const existingThread = threads.find((t) => t.profile.id === profile.id);
+      if (!existingThread) {
+        const newThread: ChatThread = {
+          id: `match_${profile.id}_${Date.now()}`,
+          profile,
+          lastMessage: `You and ${profile.name} matched! Send an icebreaker.`,
+          lastMessageTime: 'Just now',
+          unreadCount: 0,
+          isMatchNew: true,
+          messages: [
+            {
+              id: `sys_${Date.now()}`,
+              senderId: 'system',
+              text: `It's a Match! You both liked each other. Say hello to ${profile.name}! ✨`,
+              timestamp: 'Just now',
+              isMe: false,
+            },
+          ],
+        };
+        setThreads((prev) => [newThread, ...prev]);
+      }
+    }
+  };
+
+  const handleRewind = () => {
+    if (swipedHistory.length === 0) return;
+    const [lastSwiped, ...rest] = swipedHistory;
+    setSwipedHistory(rest);
+    setProfiles((prev) => [lastSwiped, ...prev]);
+  };
+
+  const handleResetDeck = () => {
+    setProfiles(INITIAL_PROFILES);
+    setSwipedHistory([]);
+  };
+
+  const handleSendMessage = (threadId: string, text: string) => {
+    const userMsg = {
+      id: `msg_${Date.now()}`,
+      senderId: 'me',
+      text,
+      timestamp: 'Just now',
+      isMe: true,
+    };
+
+    setThreads((prev) =>
+      prev.map((thread) => {
+        if (thread.id === threadId) {
+          return {
+            ...thread,
+            lastMessage: text,
+            lastMessageTime: 'Just now',
+            unreadCount: 0,
+            messages: [...thread.messages, userMsg],
+          };
+        }
+        return thread;
+      })
+    );
+
+    // Simulated responsive reply after 1.2s
+    setTimeout(() => {
+      setThreads((prev) =>
+        prev.map((thread) => {
+          if (thread.id === threadId) {
+            const replies = [
+              `That made me smile! Absolutely, rhythm and harmony are everything! 🎶`,
+              `I love that idea! When's good for you this weekend? ☕`,
+              `You have great taste! Let's definitely do it! 😊`,
+              `Haha yes! Count me in for the festival cadence! 🥁`,
+            ];
+            const randomReply = replies[Math.floor(Math.random() * replies.length)];
+            const matchReply = {
+              id: `msg_reply_${Date.now()}`,
+              senderId: thread.profile.id,
+              text: randomReply,
+              timestamp: 'Just now',
+              isMe: false,
+            };
+            return {
+              ...thread,
+              lastMessage: randomReply,
+              lastMessageTime: 'Just now',
+              unreadCount: activeThreadId === threadId ? 0 : thread.unreadCount + 1,
+              messages: [...thread.messages, matchReply],
+            };
+          }
+          return thread;
+        })
+      );
+    }, 1200);
+  };
+
+  const handleStartChatFromMatch = (profile: LoverProfile, icebreakerText?: string) => {
+    setMatchedCelebration(null);
+    let targetThread = threads.find((t) => t.profile.id === profile.id);
+    if (!targetThread) {
+      targetThread = {
+        id: `match_${profile.id}_${Date.now()}`,
+        profile,
+        lastMessage: icebreakerText || `Matched with ${profile.name}`,
+        lastMessageTime: 'Just now',
+        unreadCount: 0,
+        isMatchNew: true,
+        messages: [],
+      };
+      setThreads((prev) => [targetThread!, ...prev]);
+    }
+    setActiveThreadId(targetThread.id);
+    setActiveTab('matches');
+
+    if (icebreakerText) {
+      handleSendMessage(targetThread.id, icebreakerText);
+    }
+  };
+
+  const togglePersona = () => {
+    const nextPersona = currentPersona === 'male' ? 'female' : 'male';
+    setCurrentPersona(nextPersona);
+
+    if (nextPersona === 'female') {
+      setCurrentUserData({
+        id: 'me_female',
+        name: 'Maya',
+        age: 26,
+        gender: 'female',
+        headline: 'Flute virtuoso & sound designer for game soundtracks',
+        bio: 'Passionate about wind harmonies, street festivals, botanical sketches, and pour-over coffee.',
+        photos: [
+          '/src/assets/images/profile_sophia_female_1794407594119.jpg',
+          '/src/assets/images/dating_lovers_hero_1794407595304.jpg',
+        ],
+        passions: ['Marching & Brass', 'Sound Design', 'Coffee Crawls', 'Botanical Sketching'],
+        marchingLoveInterest: 'Marching woodwind section leader & field conductor.',
+        occupation: 'Lead Audio Designer',
+        education: 'Berklee College of Music',
+        heightCm: 169,
+        loveLanguage: 'Words of Affirmation & Quality Time',
+        zodiac: 'Cancer',
+        preferences: {
+          genderPreference: 'male',
+          ageRange: [22, 38],
+          maxDistanceKm: 30,
+          onlyVerified: false,
+        },
+      });
+    } else {
+      setCurrentUserData({
+        id: CURRENT_USER.id,
+        name: CURRENT_USER.name,
+        age: CURRENT_USER.age,
+        gender: CURRENT_USER.gender,
+        headline: CURRENT_USER.headline,
+        bio: CURRENT_USER.bio,
+        photos: CURRENT_USER.photos,
+        passions: CURRENT_USER.passions,
+        marchingLoveInterest: CURRENT_USER.marchingLoveInterest,
+        occupation: CURRENT_USER.occupation,
+        education: CURRENT_USER.education,
+        heightCm: CURRENT_USER.heightCm,
+        loveLanguage: CURRENT_USER.loveLanguage,
+        zodiac: CURRENT_USER.zodiac,
+        preferences: {
+          genderPreference: 'female',
+          ageRange: [21, 35],
+          maxDistanceKm: 25,
+          onlyVerified: false,
+        },
+      });
+    }
+  };
+
+  const handleSaveProfile = (updatedUser: EditableUserProfile) => {
+    setCurrentUserData(updatedUser);
+  };
+
+  const handleSignOut = () => {
+    try {
+      localStorage.removeItem('amora_auth_session');
+    } catch {
+      // safe fallback
+    }
+    setLoggedInUser(null);
+  };
+
+  const totalUnreadCount = threads.reduce((acc, t) => acc + t.unreadCount, 0);
+
+  return (
+    <div className="min-h-screen bg-stone-100 dark:bg-stone-950 text-stone-900 dark:text-stone-100 flex flex-col font-sans transition-colors duration-200">
+      {/* Top Bar Contract (Single row, 3 zones) */}
+      <TopBar
+        activeTab={activeTab}
+        setActiveTab={(tab) => {
+          setActiveTab(tab);
+          setShowFlutterCode(false);
+        }}
+        isDarkMode={isDarkMode}
+        setIsDarkMode={setIsDarkMode}
+        showFlutterCode={showFlutterCode}
+        setShowFlutterCode={setShowFlutterCode}
+        deviceMode={deviceMode}
+        setDeviceMode={setDeviceMode}
+        onOpenFilter={() => setIsFilterOpen(true)}
+        matchesCount={totalUnreadCount}
+      />
+
+      {/* Main Content Area */}
+      <main className="flex-1 flex flex-col">
+        {showFlutterCode ? (
+          <div className="max-w-7xl mx-auto w-full p-4 sm:p-6 flex-1 flex flex-col">
+            <FlutterCodeViewer />
+          </div>
+        ) : (
+          <DeviceFrame deviceMode={deviceMode}>
+            {/* Screen View Container */}
+            <div className="relative flex-1 flex flex-col h-full overflow-hidden bg-stone-50 dark:bg-stone-900">
+              {/* Tab View Switcher */}
+              <div className="flex-1 flex flex-col overflow-hidden">
+                {activeTab === 'swipe' && (
+                  <SwipeCardDeck
+                    profiles={rankedProfiles}
+                    onSwipe={handleSwipe}
+                    onRewind={handleRewind}
+                    canRewind={swipedHistory.length > 0}
+                    onOpenProfile={(p) => setActiveProfileModal(p)}
+                    onResetDeck={handleResetDeck}
+                    onOpenFilter={() => setIsFilterOpen(true)}
+                    onOpenAlgorithm={(p) => setExplainingProfile(p)}
+                  />
+                )}
+
+                {activeTab === 'explore' && (
+                  <ExploreGrid
+                    profiles={rankedProfiles}
+                    onSelectProfile={(p) => setActiveProfileModal(p)}
+                    onLikeProfile={(p) => handleSwipe(p, 'right')}
+                  />
+                )}
+
+                {activeTab === 'matches' && (
+                  <ChatView
+                    threads={threads}
+                    activeThreadId={activeThreadId}
+                    onSelectThread={(id) => setActiveThreadId(id)}
+                    onSendMessage={handleSendMessage}
+                    onOpenProfile={(p) => setActiveProfileModal(p)}
+                    newMatches={rankedProfiles}
+                  />
+                )}
+
+                {activeTab === 'profile' && (
+                  <UserProfileView
+                    user={currentUserData}
+                    onOpenEditProfile={() => setIsEditProfileOpen(true)}
+                    onOpenFilter={() => setIsFilterOpen(true)}
+                    isDarkMode={isDarkMode}
+                    setIsDarkMode={setIsDarkMode}
+                    currentPersona={currentPersona}
+                    onTogglePersona={togglePersona}
+                    loggedInUser={loggedInUser}
+                    onOpenAuth={() => setIsAuthModalOpen(true)}
+                    onSignOut={handleSignOut}
+                    onOpenAlgorithm={() => {
+                      if (rankedProfiles.length > 0) {
+                        setExplainingProfile(rankedProfiles[0]);
+                      }
+                    }}
+                  />
+                )}
+              </div>
+
+              {/* Bottom Navigation Bar */}
+              {activeThreadId === null && (
+                <nav className="shrink-0 h-16 bg-white/95 dark:bg-stone-900/95 backdrop-blur-md border-t border-stone-200 dark:border-stone-800 grid grid-cols-4 items-center px-2 z-30">
+                  {/* Discover */}
+                  <button
+                    onClick={() => setActiveTab('swipe')}
+                    className={`flex flex-col items-center justify-center py-1 transition-colors ${
+                      activeTab === 'swipe'
+                        ? 'text-rose-600 dark:text-rose-500 font-bold'
+                        : 'text-stone-400 dark:text-stone-500 hover:text-stone-700 dark:hover:text-stone-300'
+                    }`}
+                  >
+                    <Heart
+                      className={`w-5 h-5 ${
+                        activeTab === 'swipe' ? 'fill-rose-600 dark:fill-rose-500 stroke-rose-600' : ''
+                      }`}
+                    />
+                    <span className="text-[10px] mt-1 tracking-tight">Discover</span>
+                  </button>
+
+                  {/* Explore */}
+                  <button
+                    onClick={() => setActiveTab('explore')}
+                    className={`flex flex-col items-center justify-center py-1 transition-colors ${
+                      activeTab === 'explore'
+                        ? 'text-rose-600 dark:text-rose-500 font-bold'
+                        : 'text-stone-400 dark:text-stone-500 hover:text-stone-700 dark:hover:text-stone-300'
+                    }`}
+                  >
+                    <Compass
+                      className={`w-5 h-5 ${
+                        activeTab === 'explore' ? 'stroke-rose-600 dark:stroke-rose-500 stroke-[2.5]' : ''
+                      }`}
+                    />
+                    <span className="text-[10px] mt-1 tracking-tight">Explore</span>
+                  </button>
+
+                  {/* Matches & Chat */}
+                  <button
+                    onClick={() => setActiveTab('matches')}
+                    className={`relative flex flex-col items-center justify-center py-1 transition-colors ${
+                      activeTab === 'matches'
+                        ? 'text-rose-600 dark:text-rose-500 font-bold'
+                        : 'text-stone-400 dark:text-stone-500 hover:text-stone-700 dark:hover:text-stone-300'
+                    }`}
+                  >
+                    <div className="relative">
+                      <MessageCircle
+                        className={`w-5 h-5 ${
+                          activeTab === 'matches'
+                            ? 'fill-rose-600 dark:fill-rose-500 stroke-rose-600'
+                            : ''
+                        }`}
+                      />
+                      {totalUnreadCount > 0 && (
+                        <div className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-rose-500 border border-white dark:border-stone-900" />
+                      )}
+                    </div>
+                    <span className="text-[10px] mt-1 tracking-tight">Matches</span>
+                  </button>
+
+                  {/* Profile */}
+                  <button
+                    onClick={() => setActiveTab('profile')}
+                    className={`flex flex-col items-center justify-center py-1 transition-colors ${
+                      activeTab === 'profile'
+                        ? 'text-rose-600 dark:text-rose-500 font-bold'
+                        : 'text-stone-400 dark:text-stone-500 hover:text-stone-700 dark:hover:text-stone-300'
+                    }`}
+                  >
+                    <User
+                      className={`w-5 h-5 ${
+                        activeTab === 'profile' ? 'stroke-rose-600 dark:stroke-rose-500 stroke-[2.5]' : ''
+                      }`}
+                    />
+                    <span className="text-[10px] mt-1 tracking-tight">Profile</span>
+                  </button>
+                </nav>
+              )}
+            </div>
+          </DeviceFrame>
+        )}
+      </main>
+
+      {/* Profile Detail Modal */}
+      <ProfileDetailModal
+        profile={activeProfileModal}
+        onClose={() => setActiveProfileModal(null)}
+        onLike={(p) => {
+          handleSwipe(p, 'right');
+          setActiveProfileModal(null);
+        }}
+        onPass={(p) => {
+          handleSwipe(p, 'left');
+          setActiveProfileModal(null);
+        }}
+        onStartChat={(p) => {
+          setActiveProfileModal(null);
+          handleStartChatFromMatch(p);
+        }}
+      />
+
+      {/* Edit Profile Modal */}
+      <EditProfileModal
+        isOpen={isEditProfileOpen}
+        onClose={() => setIsEditProfileOpen(false)}
+        user={currentUserData}
+        onSave={handleSaveProfile}
+      />
+
+      {/* Filter Sheet Modal */}
+      <FilterSheet
+        isOpen={isFilterOpen}
+        onClose={() => setIsFilterOpen(false)}
+        filters={currentUserData.preferences}
+        onUpdateFilters={(newFilters) =>
+          setCurrentUserData((prev) => ({
+            ...prev,
+            preferences: newFilters,
+          }))
+        }
+      />
+
+      {/* Authentication Modal */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onLoginSuccess={(user) => setLoggedInUser(user)}
+      />
+
+      {/* Match Chemistry Algorithm Explainer Modal */}
+      <AlgorithmExplainerModal
+        profile={explainingProfile}
+        onClose={() => setExplainingProfile(null)}
+        user={currentUserData}
+      />
+
+      {/* Match Celebration Overlay */}
+      <MatchCelebrationModal
+        matchedProfile={matchedCelebration}
+        currentUserAvatar={currentUserData.photos[0]}
+        onClose={() => setMatchedCelebration(null)}
+        onOpenChat={handleStartChatFromMatch}
+      />
+    </div>
+  );
+}

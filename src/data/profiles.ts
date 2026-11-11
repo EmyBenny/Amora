@@ -1,0 +1,258 @@
+import { LoverProfile } from '../types';
+
+export const INITIAL_PROFILES: LoverProfile[] = [
+  {
+    id: 'profile_sophia',
+    name: 'Sophia',
+    age: 26,
+    gender: 'female',
+    headline: 'Architect of warm spaces & lover of brass harmonies',
+    bio: 'Landscape architect by day, avid vinyl collector and festival marcher on weekends. Looking for someone who enjoys quiet Sunday roasters, impromptu museum walks, and deep late-night talks.',
+    distanceKm: 3.8,
+    photos: [
+      '/src/assets/images/profile_sophia_female_1794407594119.jpg',
+      '/src/assets/images/dating_lovers_hero_1794407595304.jpg',
+    ],
+    verified: true,
+    matchScore: 96,
+    passions: ['Marching & Brass', 'Coffee Crawls', 'Landscape Design', 'Vinyl Records', 'Indie Folk'],
+    marchingLoveInterest: 'Trumpet lead in alumni marching ensemble; loves festival parades and brass funk vibes.',
+    occupation: 'Senior Landscape Architect',
+    education: 'Rhode Island School of Design',
+    heightCm: 168,
+    loveLanguage: 'Quality Time & Words of Affirmation',
+    zodiac: 'Taurus',
+    voicePrompt: {
+      title: 'The melody stuck in my head today',
+      durationSeconds: 14,
+    },
+    prompts: [
+      {
+        question: 'My ideal first date recipe',
+        answer: 'Exploring a small botanical conservatory, grabbing iced cardamom cortados, and getting lost in an antique bookstore.',
+      },
+      {
+        question: 'Together, we could',
+        answer: 'Learn the snare drum cadence for the summer parade or hunt down the best wood-fired pizza in the city.',
+      },
+      {
+        question: 'A boundary I hold sacred',
+        answer: 'Phones put away at dinner. Real eye contact is rare and golden.',
+      },
+    ],
+  },
+  {
+    id: 'profile_alex',
+    name: 'Alex',
+    age: 27,
+    gender: 'male',
+    headline: 'Acoustic rhythms, documentary filmmaking & road trips',
+    bio: 'Documentary cinematographer with a soft spot for sunrise coffee and brass parades. I believe chemistry is 80% laughter and 20% shared curiosity.',
+    distanceKm: 5.2,
+    photos: [
+      '/src/assets/images/profile_alex_male_1794407597086.jpg',
+      '/src/assets/images/dating_lovers_hero_1794407595304.jpg',
+    ],
+    verified: true,
+    matchScore: 92,
+    passions: ['Drumline & Percussion', '35mm Film', 'Wilderness Camping', 'Espresso', 'Jazz Fusion'],
+    marchingLoveInterest: 'Tenor quad drummer; passionate about high-energy syncopated rhythms and marching precision.',
+    occupation: 'Documentary Director & DP',
+    education: 'NYU Tisch School of the Arts',
+    heightCm: 184,
+    loveLanguage: 'Acts of Service & Physical Touch',
+    zodiac: 'Sagittarius',
+    voicePrompt: {
+      title: 'A sound that always relaxes me',
+      durationSeconds: 18,
+    },
+    prompts: [
+      {
+        question: 'The key to my heart',
+        answer: 'Making me laugh when I am taking myself too seriously, and introducing me to songs that give me chills.',
+      },
+      {
+        question: 'My favorite shared adventure',
+        answer: 'Packing a vintage camper van on Friday evening and driving toward the nearest coastline with no reservations.',
+      },
+      {
+        question: 'Unpopular opinion I will defend',
+        answer: 'Marching brass bands have more soul and electrifying live energy than any modern festival DJ set.',
+      },
+    ],
+  },
+  {
+    id: 'profile_elena',
+    name: 'Elena',
+    age: 25,
+    gender: 'female',
+    headline: 'Ceramicist, tango dancer & sunny terrace enthusiast',
+    bio: 'Running my small ceramic studio in the arts district. When my hands aren’t covered in clay, I love Latin percussion, live marching fanfare, and slow cooking pasta for friends.',
+    distanceKm: 2.4,
+    photos: [
+      '/src/assets/images/profile_elena_female_1794407596172.jpg',
+      '/src/assets/images/dating_lovers_hero_1794407595304.jpg',
+    ],
+    verified: true,
+    matchScore: 89,
+    passions: ['Marching Bands', 'Pottery & Ceramics', 'Italian Cooking', 'Acoustic Guitar', 'Bicycle Tours'],
+    marchingLoveInterest: 'Colorguard & drill visual artist; loves flag twirling and syncopated field choreography.',
+    occupation: 'Studio Ceramicist & Instructor',
+    education: 'Accademia di Belle Arti',
+    heightCm: 172,
+    loveLanguage: 'Receiving Gifts (Handcrafted) & Touch',
+    zodiac: 'Leo',
+    voicePrompt: {
+      title: 'Saying hi in Italian and laughing at my cat',
+      durationSeconds: 12,
+    },
+    prompts: [
+      {
+        question: 'Two truths and a lie',
+        answer: 'I once performed in the Pasadena Rose Parade, I bake sourdough every Thursday, I have never seen The Godfather.',
+      },
+      {
+        question: 'Dating me is like',
+        answer: 'Having an infinite supply of quirky handcrafted mugs and someone who will cheer for you louder than anyone else.',
+      },
+      {
+        question: 'I will know we click if',
+        answer: 'We can sit in comfortable silence for 20 minutes without either of us feeling the urge to check our screens.',
+      },
+    ],
+  },
+  {
+    id: 'profile_marcus',
+    name: 'Marcus',
+    age: 28,
+    gender: 'male',
+    headline: 'Sports medicine doc, trumpet player & trail runner',
+    bio: 'Physiotherapist who loves helping athletes recover and pushing my own half-marathon limits. Huge lover of brass band concerts, outdoor cooking, and dogs.',
+    distanceKm: 6.9,
+    photos: [
+      '/src/assets/images/profile_marcus_male_1794407594793.jpg',
+      '/src/assets/images/dating_lovers_hero_1794407595304.jpg',
+    ],
+    verified: true,
+    matchScore: 94,
+    passions: ['Brass Fanfare', 'Trail Running', 'Bouldering', 'Cooking Stews', 'Acoustic Jamming'],
+    marchingLoveInterest: 'Euphonium & Trombone player; loves high-stepping brass fanfares and stadium acoustics.',
+    occupation: 'Orthopedic Physiotherapist',
+    education: 'Northwestern University',
+    heightCm: 188,
+    loveLanguage: 'Words of Affirmation & Quality Time',
+    zodiac: 'Aries',
+    voicePrompt: {
+      title: 'Quick brass riff and greeting',
+      durationSeconds: 16,
+    },
+    prompts: [
+      {
+        question: 'My secret talent',
+        answer: 'I can identify nearly any brass instrument in an orchestral or marching recording within 3 seconds.',
+      },
+      {
+        question: 'The best way to spend a Saturday',
+        answer: 'Morning 10k trail run, farmers market peaches and cinnamon rolls, then cheering at a live stadium parade.',
+      },
+      {
+        question: 'What I value most in a partner',
+        answer: 'Emotional generosity, intellectual curiosity, and someone who appreciates both high-energy dates and cozy sofa nights.',
+      },
+    ],
+  },
+];
+
+export const CURRENT_USER = {
+  id: 'me',
+  name: 'Liam',
+  age: 27,
+  gender: 'male' as const,
+  headline: 'Bassline enthusiast & UX craftsman',
+  bio: 'Designing thoughtful mobile apps. Passionate about music festivals, marching percussion, specialty pour-overs, and weekend cycling.',
+  avatar: '/src/assets/images/profile_alex_male_1794407597086.jpg',
+  photos: [
+    '/src/assets/images/profile_alex_male_1794407597086.jpg',
+    '/src/assets/images/dating_lovers_hero_1794407595304.jpg',
+  ],
+  verified: true,
+  passions: ['Marching & Brass', 'Coffee Crawls', 'UX Design', 'Vinyl Records', 'Trail Running'],
+  marchingLoveInterest: 'Marching snare drummer and percussion arranger; loves high cadence street beats.',
+  occupation: 'Lead Product Designer',
+  education: 'Carnegie Mellon University',
+  heightCm: 182,
+  zodiac: 'Libra',
+  loveLanguage: 'Quality Time & Words of Affirmation',
+};
+
+export const INITIAL_MATCHES = [
+  {
+    id: 'match_sophia',
+    profile: INITIAL_PROFILES[0],
+    lastMessage: 'I loved your note about the brass fanfare! When are we checking out that vinyl cafe?',
+    lastMessageTime: '12m ago',
+    unreadCount: 1,
+    isMatchNew: true,
+    messages: [
+      {
+        id: 'm1',
+        senderId: 'sophia',
+        text: 'Hey Liam! Your profile caught my eye—especially your note on marching snare cadences! 🥁',
+        timestamp: '10:14 AM',
+        isMe: false,
+      },
+      {
+        id: 'm2',
+        senderId: 'me',
+        text: 'Hey Sophia! That is awesome, trumpet and snare make the ultimate rhythm duo. Are you still playing with the alumni ensemble?',
+        timestamp: '10:18 AM',
+        isMe: true,
+      },
+      {
+        id: 'm3',
+        senderId: 'sophia',
+        text: 'Yes! We rehearse every Thursday evening. There is this cozy coffee spot with live acoustic sets right next to the hall.',
+        timestamp: '10:22 AM',
+        isMe: false,
+      },
+      {
+        id: 'm4',
+        senderId: 'sophia',
+        text: 'I loved your note about the brass fanfare! When are we checking out that vinyl cafe?',
+        timestamp: '10:23 AM',
+        isMe: false,
+      },
+    ],
+  },
+  {
+    id: 'match_elena',
+    profile: INITIAL_PROFILES[2],
+    lastMessage: 'Deal! Saturday afternoon works great for ceramic workshop.',
+    lastMessageTime: '2h ago',
+    unreadCount: 0,
+    isMatchNew: false,
+    messages: [
+      {
+        id: 'm_e1',
+        senderId: 'elena',
+        text: 'Ciao Liam! Ready to test your clay throwing skills?',
+        timestamp: 'Yesterday',
+        isMe: false,
+      },
+      {
+        id: 'm_e2',
+        senderId: 'me',
+        text: 'Only if you promise not to laugh if my cup turns into a pancake!',
+        timestamp: 'Yesterday',
+        isMe: true,
+      },
+      {
+        id: 'm_e3',
+        senderId: 'elena',
+        text: 'Deal! Saturday afternoon works great for ceramic workshop.',
+        timestamp: '2h ago',
+        isMe: false,
+      },
+    ],
+  },
+];

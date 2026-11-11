@@ -1,0 +1,6 @@
+{
+  "name": "Amora - Cross-Platform Dating & Matchmaking App",
+  "description": "Cross-platform mobile application for dating and matching lovers, with fluid swipe gestures, compatibility chemistry, interactive male and female filters, real-time messaging, and complete Flutter/Dart source code export.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
