@@ -64,9 +64,10 @@ export interface ChatThread {
 export type NotificationType =
   | 'new_match'
   | 'message'
-  | 'super_like'
-  | 'date_invite'
   | 'marching_event'
+  | 'super_like'
+  | 'system'
+  | 'date_invite'
   | 'chemistry_alert';
 
 export interface AppNotification {
@@ -79,8 +80,8 @@ export interface AppNotification {
   senderId?: string;
   senderName?: string;
   senderAvatar?: string;
-  actionRoute?: string;
   relatedProfileId?: string;
+  actionRoute?: string;
 }
 
 export interface NotificationSettings {

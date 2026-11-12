@@ -1,26 +1,28 @@
-From 03024ba2866e15d710c2cc07ef8f9eaa616fa319 Mon Sep 17 00:00:00 2001
-From: EmyBenny <uzorbenny51@gmail.com>
-Date: Wed, 11 Nov 2026 16:14:02 +0000
-Subject: [PATCH] feat(notifications): implement notification system with local
- push and preferences hub
+From 2fd795c717a4a03ae7ba77e6006498f94a4854e3 Mon Sep 17 00:00:00 2001
+From: Benny Digital Access <uzorbenny51@gmail.com>
+Date: Thu, 12 Nov 2026 16:06:59 +0000
+Subject: [PATCH] feat(amora): complete mobile layout, notification system, and
+ Flutter source on develop
 
 ---
  README.md                                     |  25 +-
- flutter_project/lib/main.dart                 | 139 +++++
- .../lib/models/app_notification.dart          |  64 +++
- flutter_project/lib/models/lover_profile.dart |  93 ++++
- .../lib/screens/notifications_screen.dart     | 170 ++++++
- .../lib/services/auth_service.dart            | 137 +++++
- .../lib/services/matching_algorithm.dart      | 131 +++++
- .../lib/services/notification_service.dart    | 129 +++++
- flutter_project/pubspec.yaml                  |  42 ++
- .../test/notification_service_test.dart       |  89 ++++
- src/App.tsx                                   | 140 ++++-
- src/components/NotificationsModal.tsx         | 320 ++++++++++++
- src/components/TopBar.tsx                     |  19 +-
- src/data/flutterCode.ts                       | 484 +++++++++++++++++-
- src/types/index.ts                            |  31 ++
- 15 files changed, 2006 insertions(+), 7 deletions(-)
+ flutter_project/lib/main.dart                 | 139 ++++++++
+ .../lib/models/app_notification.dart          |  64 ++++
+ flutter_project/lib/models/lover_profile.dart |  93 +++++
+ .../lib/screens/notifications_screen.dart     | 170 ++++++++++
+ .../lib/services/auth_service.dart            | 137 ++++++++
+ .../lib/services/matching_algorithm.dart      | 131 +++++++
+ .../lib/services/notification_service.dart    | 129 +++++++
+ flutter_project/pubspec.yaml                  |  42 +++
+ .../test/notification_service_test.dart       |  89 +++++
+ src/App.tsx                                   | 216 ++++++++++--
+ src/components/DeviceFrame.tsx                |  72 ++--
+ src/components/FlutterCodeViewer.tsx          |  18 +-
+ src/components/NotificationsModal.tsx         | 320 ++++++++++++++++++
+ src/components/TopBar.tsx                     | 187 ----------
+ src/components/UserProfileView.tsx            |  24 ++
+ src/types/index.ts                            |  32 ++
+ 17 files changed, 1638 insertions(+), 250 deletions(-)
  create mode 100644 flutter_project/lib/main.dart
  create mode 100644 flutter_project/lib/models/app_notification.dart
  create mode 100644 flutter_project/lib/models/lover_profile.dart
@@ -31,6 +33,7 @@ Subject: [PATCH] feat(notifications): implement notification system with local
  create mode 100644 flutter_project/pubspec.yaml
  create mode 100644 flutter_project/test/notification_service_test.dart
  create mode 100644 src/components/NotificationsModal.tsx
+ delete mode 100644 src/components/TopBar.tsx
 
 diff --git a/README.md b/README.md
 index 2f00dfb..8701606 100644
@@ -1142,10 +1145,21 @@ index 0000000..c910e88
 +  });
 +}
 diff --git a/src/App.tsx b/src/App.tsx
-index a6a151c..f584386 100644
+index a6a151c..5b2897c 100644
 --- a/src/App.tsx
 +++ b/src/App.tsx
-@@ -18,8 +18,9 @@ import { FlutterCodeViewer } from './components/FlutterCodeViewer';
+@@ -4,8 +4,9 @@ import {
+   Compass,
+   MessageCircle,
+   User,
++  Bell,
++  SlidersHorizontal,
+ } from 'lucide-react';
+-import { TopBar } from './components/TopBar';
+ import { DeviceFrame } from './components/DeviceFrame';
+ import { SwipeCardDeck } from './components/SwipeCardDeck';
+ import { ProfileDetailModal } from './components/ProfileDetailModal';
+@@ -18,8 +19,9 @@ import { FlutterCodeViewer } from './components/FlutterCodeViewer';
  import { AuthModal } from './components/AuthModal';
  import { EditProfileModal, EditableUserProfile } from './components/EditProfileModal';
  import { AlgorithmExplainerModal } from './components/AlgorithmExplainerModal';
@@ -1156,7 +1170,16 @@ index a6a151c..f584386 100644
  import { rankProfiles } from './services/matchingAlgorithm';
  
  export default function App() {
-@@ -77,6 +78,64 @@ export default function App() {
+@@ -29,7 +31,7 @@ export default function App() {
+   // Layout & Navigation state
+   const [activeTab, setActiveTab] = useState<'swipe' | 'explore' | 'matches' | 'profile'>('swipe');
+   const [showFlutterCode, setShowFlutterCode] = useState<boolean>(false);
+-  const [deviceMode, setDeviceMode] = useState<'mobile' | 'pixel' | 'fullscreen'>('mobile');
++  const [deviceMode, setDeviceMode] = useState<'mobile' | 'pixel'>('mobile');
+ 
+   // Test Persona: 'male' (Liam) or 'female' (Maya)
+   const [currentPersona, setCurrentPersona] = useState<'male' | 'female'>('male');
+@@ -77,6 +79,64 @@ export default function App() {
    const [isEditProfileOpen, setIsEditProfileOpen] = useState<boolean>(false);
    const [isFilterOpen, setIsFilterOpen] = useState<boolean>(false);
    const [explainingProfile, setExplainingProfile] = useState<LoverProfile | null>(null);
@@ -1221,7 +1244,7 @@ index a6a151c..f584386 100644
  
    // Profiles stack
    const [profiles, setProfiles] = useState<LoverProfile[]>(INITIAL_PROFILES);
-@@ -129,6 +188,22 @@ export default function App() {
+@@ -129,6 +189,22 @@ export default function App() {
      if (direction === 'right' || direction === 'super') {
        setMatchedCelebration(profile);
  
@@ -1244,7 +1267,7 @@ index a6a151c..f584386 100644
        const existingThread = threads.find((t) => t.profile.id === profile.id);
        if (!existingThread) {
          const newThread: ChatThread = {
-@@ -208,6 +283,23 @@ export default function App() {
+@@ -208,6 +284,23 @@ export default function App() {
                timestamp: 'Just now',
                isMe: false,
              };
@@ -1268,7 +1291,7 @@ index a6a151c..f584386 100644
              return {
                ...thread,
                lastMessage: randomReply,
-@@ -314,7 +406,38 @@ export default function App() {
+@@ -314,37 +407,100 @@ export default function App() {
      setLoggedInUser(null);
    };
  
@@ -1307,16 +1330,97 @@ index a6a151c..f584386 100644
  
    return (
      <div className="min-h-screen bg-stone-100 dark:bg-stone-950 text-stone-900 dark:text-stone-100 flex flex-col font-sans transition-colors duration-200">
-@@ -333,6 +456,8 @@ export default function App() {
-         setDeviceMode={setDeviceMode}
-         onOpenFilter={() => setIsFilterOpen(true)}
-         matchesCount={totalUnreadCount}
-+        notificationsCount={unreadNotifsCount}
-+        onOpenNotifications={() => setIsNotificationsOpen(true)}
-       />
- 
+-      {/* Top Bar Contract (Single row, 3 zones) */}
+-      <TopBar
+-        activeTab={activeTab}
+-        setActiveTab={(tab) => {
+-          setActiveTab(tab);
+-          setShowFlutterCode(false);
+-        }}
+-        isDarkMode={isDarkMode}
+-        setIsDarkMode={setIsDarkMode}
+-        showFlutterCode={showFlutterCode}
+-        setShowFlutterCode={setShowFlutterCode}
+-        deviceMode={deviceMode}
+-        setDeviceMode={setDeviceMode}
+-        onOpenFilter={() => setIsFilterOpen(true)}
+-        matchesCount={totalUnreadCount}
+-      />
+-
        {/* Main Content Area */}
-@@ -544,6 +669,19 @@ export default function App() {
+-      <main className="flex-1 flex flex-col">
++      <main className="flex-1 flex flex-col items-center justify-center">
+         {showFlutterCode ? (
+           <div className="max-w-7xl mx-auto w-full p-4 sm:p-6 flex-1 flex flex-col">
+-            <FlutterCodeViewer />
++            <FlutterCodeViewer onClose={() => setShowFlutterCode(false)} />
+           </div>
+         ) : (
+-          <DeviceFrame deviceMode={deviceMode}>
++          <DeviceFrame
++            deviceMode={deviceMode}
++            onToggleDeviceMode={() =>
++              setDeviceMode((prev) => (prev === 'mobile' ? 'pixel' : 'mobile'))
++            }
++          >
+             {/* Screen View Container */}
+             <div className="relative flex-1 flex flex-col h-full overflow-hidden bg-stone-50 dark:bg-stone-900">
++              {/* In-App Header: Logo on left, Notification Bar opposite the logo on the right */}
++              {activeThreadId === null && (
++                <header className="shrink-0 h-14 px-4 bg-white/95 dark:bg-stone-900/95 backdrop-blur-md border-b border-stone-200/80 dark:border-stone-800 flex items-center justify-between z-20 select-none">
++                  {/* Left: Amora Brand Logo */}
++                  <button
++                    onClick={() => setActiveTab('swipe')}
++                    className="flex items-center gap-2 text-left focus:outline-none cursor-pointer group"
++                  >
++                    <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-rose-600 via-rose-500 to-amber-500 flex items-center justify-center text-white shadow-xs group-hover:scale-105 transition-transform">
++                      <Heart className="w-4 h-4 fill-white" />
++                    </div>
++                    <span className="font-serif-romance text-xl font-bold tracking-tight text-stone-900 dark:text-white">
++                      Amora
++                    </span>
++                  </button>
++
++                  {/* Right (Opposite the Logo): Notification Bar & Filters */}
++                  <div className="flex items-center gap-1.5">
++                    <button
++                      onClick={() => setIsFilterOpen(true)}
++                      className="p-2 rounded-xl text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-white hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors cursor-pointer"
++                      title="Dating Preferences"
++                      aria-label="Filter dating preferences"
++                    >
++                      <SlidersHorizontal className="w-5 h-5" />
++                    </button>
++
++                    <button
++                      onClick={() => setIsNotificationsOpen(true)}
++                      className="relative p-2 rounded-xl text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-white hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors cursor-pointer"
++                      title="Notifications"
++                      aria-label="View notifications"
++                    >
++                      <Bell className="w-5 h-5" />
++                      {unreadNotifsCount > 0 && (
++                        <span className="absolute top-1 right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center shadow-xs ring-2 ring-white dark:ring-stone-900 animate-pulse">
++                          {unreadNotifsCount}
++                        </span>
++                      )}
++                    </button>
++                  </div>
++                </header>
++              )}
++
+               {/* Tab View Switcher */}
+               <div className="flex-1 flex flex-col overflow-hidden">
+                 {activeTab === 'swipe' && (
+@@ -396,6 +552,7 @@ export default function App() {
+                         setExplainingProfile(rankedProfiles[0]);
+                       }
+                     }}
++                    onViewFlutterCode={() => setShowFlutterCode(true)}
+                   />
+                 )}
+               </div>
+@@ -544,6 +701,19 @@ export default function App() {
          onClose={() => setMatchedCelebration(null)}
          onOpenChat={handleStartChatFromMatch}
        />
@@ -1336,6 +1440,163 @@ index a6a151c..f584386 100644
      </div>
    );
  }
+diff --git a/src/components/DeviceFrame.tsx b/src/components/DeviceFrame.tsx
+index 02657f4..6b12939 100644
+--- a/src/components/DeviceFrame.tsx
++++ b/src/components/DeviceFrame.tsx
+@@ -2,69 +2,75 @@ import React from 'react';
+ import { Wifi, Battery, Signal } from 'lucide-react';
+ 
+ interface DeviceFrameProps {
+-  deviceMode: 'mobile' | 'pixel' | 'fullscreen';
++  deviceMode: 'mobile' | 'pixel';
++  onToggleDeviceMode?: () => void;
+   children: React.ReactNode;
+ }
+ 
+ export const DeviceFrame: React.FC<DeviceFrameProps> = ({
+   deviceMode,
++  onToggleDeviceMode,
+   children,
+ }) => {
+-  if (deviceMode === 'fullscreen') {
+-    return (
+-      <div className="w-full min-h-[calc(100vh-3.5rem)] bg-stone-50 dark:bg-stone-950 flex flex-col">
+-        <div className="max-w-5xl mx-auto w-full flex-1 flex flex-col px-3 sm:px-6 py-4">
+-          {children}
+-        </div>
+-      </div>
+-    );
+-  }
+-
+   const isIos = deviceMode === 'mobile';
+ 
+   return (
+-    <div className="min-h-[calc(100vh-3.5rem)] py-4 sm:py-8 px-2 flex items-center justify-center bg-stone-100 dark:bg-stone-950/70 overflow-x-hidden">
+-      {/* Smartphone Chassis */}
++    <div className="flex-1 w-full flex items-center justify-center p-0 sm:py-6 sm:px-4 bg-stone-100/70 dark:bg-stone-950/90 overflow-x-hidden min-h-screen">
++      {/* Sleek Mobile Container */}
+       <div
+-        className={`relative w-full max-w-[400px] h-[780px] sm:h-[830px] rounded-[44px] shadow-2xl transition-all duration-300 border-[9px] flex flex-col overflow-hidden bg-stone-900 ${
++        className={`relative w-full max-w-[425px] h-screen sm:h-[844px] flex flex-col bg-white dark:bg-stone-900 overflow-hidden shadow-2xl transition-all duration-300 ${
+           isIos
+-            ? 'border-stone-800 dark:border-stone-700 shadow-stone-900/40 ring-1 ring-white/10'
+-            : 'border-stone-700 dark:border-stone-600 rounded-[38px] shadow-stone-900/30'
++            ? 'sm:rounded-[44px] border border-stone-200/80 dark:border-stone-800'
++            : 'sm:rounded-[36px] border border-stone-200/80 dark:border-stone-800'
+         }`}
+       >
+-        {/* Hardware Status Bar */}
+-        <div className="relative z-30 shrink-0 h-10 px-6 flex items-center justify-between text-[11px] font-semibold text-stone-900 dark:text-white bg-transparent pointer-events-none select-none">
+-          {/* Clock */}
+-          <span>9:41</span>
++        {/* Frame Top Status Bar (Phone OS status bar) */}
++        <div className="relative z-30 shrink-0 h-10 px-5 flex items-center justify-between text-[11px] font-semibold text-stone-900 dark:text-white bg-white/95 dark:bg-stone-900/95 backdrop-blur-md border-b border-stone-100 dark:border-stone-800/80 select-none">
++          {/* Left: Clock */}
++          <span className="font-medium tracking-tight text-stone-700 dark:text-stone-300">
++            {isIos ? '9:41' : '10:00'}
++          </span>
+ 
+-          {/* Dynamic Island / Camera Punch Hole */}
++          {/* Center: Device Notch / Camera */}
+           {isIos ? (
+-            <div className="absolute left-1/2 -translate-x-1/2 top-2 h-6 w-28 bg-black rounded-full flex items-center justify-end pr-2 gap-1.5 shadow-inner">
+-              <div className="w-2.5 h-2.5 rounded-full bg-stone-900 border border-stone-800" />
++            <div className="w-24 h-4 bg-stone-950 dark:bg-black rounded-full flex items-center justify-center shadow-inner">
++              <div className="w-2 h-2 rounded-full bg-stone-800 mr-2" />
++              <div className="w-1.5 h-1.5 rounded-full bg-sky-950" />
+             </div>
+           ) : (
+-            <div className="w-3.5 h-3.5 rounded-full bg-black border border-stone-800 shadow-inner" />
++            <div className="w-3.5 h-3.5 bg-stone-950 dark:bg-black rounded-full border border-stone-700/50 shadow-inner" />
+           )}
+ 
+-          {/* Telemetry Icons */}
+-          <div className="flex items-center gap-1.5">
++          {/* Right: Platform switcher + Telemetry */}
++          <div className="flex items-center gap-2 text-stone-600 dark:text-stone-300">
++            {onToggleDeviceMode && (
++              <button
++                onClick={onToggleDeviceMode}
++                className="px-2 py-0.5 rounded-md bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-[10px] font-semibold tracking-wider uppercase transition-colors cursor-pointer"
++                title="Toggle between iOS and Pixel view"
++              >
++                {isIos ? 'iOS' : 'Pixel'}
++              </button>
++            )}
+             <Signal className="w-3 h-3" />
+             <Wifi className="w-3 h-3" />
+             <Battery className="w-3.5 h-3.5" />
+           </div>
+         </div>
+ 
+-        {/* Smartphone Screen Content */}
++        {/* Mobile Screen Content */}
+         <div className="relative flex-1 flex flex-col overflow-hidden bg-stone-50 dark:bg-stone-900">
+           {children}
+         </div>
+ 
+-        {/* Bottom Home Indicator Bar (iOS) */}
+-        {isIos && (
+-          <div className="shrink-0 h-4 bg-transparent flex items-center justify-center pointer-events-none">
+-            <div className="w-32 h-1 bg-stone-400 dark:bg-stone-500 rounded-full" />
+-          </div>
+-        )}
++        {/* Bottom Platform Gesture Bar */}
++        <div className="shrink-0 h-5 bg-white dark:bg-stone-900 border-t border-stone-100 dark:border-stone-850 flex items-center justify-center pointer-events-none">
++          {isIos ? (
++            <div className="w-32 h-1 bg-stone-400/80 dark:bg-stone-600 rounded-full" />
++          ) : (
++            <div className="w-20 h-1 bg-stone-400/80 dark:bg-stone-600 rounded-full" />
++          )}
++        </div>
+       </div>
+     </div>
+   );
+diff --git a/src/components/FlutterCodeViewer.tsx b/src/components/FlutterCodeViewer.tsx
+index 7545036..b262178 100644
+--- a/src/components/FlutterCodeViewer.tsx
++++ b/src/components/FlutterCodeViewer.tsx
+@@ -2,7 +2,11 @@ import React, { useState } from 'react';
+ import { Copy, Check, FileCode, Terminal, Download, Sparkles } from 'lucide-react';
+ import { FLUTTER_CODEBASE, FlutterCodeFile } from '../data/flutterCode';
+ 
+-export const FlutterCodeViewer: React.FC = () => {
++interface FlutterCodeViewerProps {
++  onClose?: () => void;
++}
++
++export const FlutterCodeViewer: React.FC<FlutterCodeViewerProps> = ({ onClose }) => {
+   const [selectedFileIndex, setSelectedFileIndex] = useState<number>(1); // Default to main.dart
+   const [copied, setCopied] = useState<boolean>(false);
+ 
+@@ -42,16 +46,24 @@ export const FlutterCodeViewer: React.FC = () => {
+         </div>
+ 
+         <div className="flex items-center gap-2 shrink-0">
++          {onClose && (
++            <button
++              onClick={onClose}
++              className="py-1.5 px-3 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs font-medium transition-colors flex items-center gap-1.5 border border-stone-700 cursor-pointer"
++            >
++              <span>← Back to App</span>
++            </button>
++          )}
+           <button
+             onClick={handleDownload}
+-            className="py-1.5 px-3 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs font-medium transition-colors flex items-center gap-1.5 border border-stone-700"
++            className="py-1.5 px-3 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs font-medium transition-colors flex items-center gap-1.5 border border-stone-700 cursor-pointer"
+           >
+             <Download className="w-3.5 h-3.5" />
+             <span>Download File</span>
+           </button>
+           <button
+             onClick={handleCopy}
+-            className="py-1.5 px-3 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-xs"
++            className="py-1.5 px-3 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+           >
+             {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+             <span>{copied ? 'Copied to Clipboard!' : 'Copy Dart Code'}</span>
 diff --git a/src/components/NotificationsModal.tsx b/src/components/NotificationsModal.tsx
 new file mode 100644
 index 0000000..9ed022a
@@ -1663,563 +1924,259 @@ index 0000000..9ed022a
 +  );
 +};
 diff --git a/src/components/TopBar.tsx b/src/components/TopBar.tsx
-index 45e12c4..579f0b6 100644
+deleted file mode 100644
+index 45e12c4..0000000
 --- a/src/components/TopBar.tsx
-+++ b/src/components/TopBar.tsx
-@@ -1,5 +1,5 @@
- import React from 'react';
++++ /dev/null
+@@ -1,187 +0,0 @@
+-import React from 'react';
 -import { Heart, Code2, Smartphone, Moon, Sun, SlidersHorizontal } from 'lucide-react';
-+import { Heart, Code2, Smartphone, Moon, Sun, SlidersHorizontal, Bell } from 'lucide-react';
+-
+-interface TopBarProps {
+-  activeTab: 'swipe' | 'explore' | 'matches' | 'profile';
+-  setActiveTab: (tab: 'swipe' | 'explore' | 'matches' | 'profile') => void;
+-  isDarkMode: boolean;
+-  setIsDarkMode: (val: boolean) => void;
+-  showFlutterCode: boolean;
+-  setShowFlutterCode: (val: boolean) => void;
+-  deviceMode: 'mobile' | 'pixel' | 'fullscreen';
+-  setDeviceMode: (mode: 'mobile' | 'pixel' | 'fullscreen') => void;
+-  onOpenFilter: () => void;
+-  matchesCount: number;
+-}
+-
+-export const TopBar: React.FC<TopBarProps> = ({
+-  activeTab,
+-  setActiveTab,
+-  isDarkMode,
+-  setIsDarkMode,
+-  showFlutterCode,
+-  setShowFlutterCode,
+-  deviceMode,
+-  setDeviceMode,
+-  onOpenFilter,
+-  matchesCount,
+-}) => {
+-  return (
+-    <header className="sticky top-0 z-40 w-full border-b border-stone-200 dark:border-stone-800 bg-white/95 dark:bg-stone-950/95 backdrop-blur-md">
+-      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-8">
+-        {/* Zone 1: Brand Wordmark */}
+-        <div className="flex items-center gap-3 shrink-0">
+-          <button
+-            onClick={() => {
+-              setActiveTab('swipe');
+-              setShowFlutterCode(false);
+-            }}
+-            className="flex items-center gap-2 text-left focus:outline-none group"
+-          >
+-            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-rose-600 via-rose-500 to-amber-500 flex items-center justify-center text-white shadow-sm shadow-rose-500/20 group-hover:scale-105 transition-transform">
+-              <Heart className="w-4 h-4 fill-white" />
+-            </div>
+-            <span className="font-serif-romance text-xl font-bold tracking-tight text-stone-900 dark:text-white whitespace-nowrap">
+-              Amora
+-            </span>
+-          </button>
+-        </div>
+-
+-        {/* Zone 2: Concise Navigation Links */}
+-        <nav className="hidden md:flex items-center gap-6 text-xs uppercase tracking-wider font-semibold text-stone-600 dark:text-stone-300">
+-          <button
+-            onClick={() => {
+-              setActiveTab('swipe');
+-              setShowFlutterCode(false);
+-            }}
+-            className={`transition-colors whitespace-nowrap shrink-0 hover:text-stone-900 dark:hover:text-white pb-0.5 ${
+-              activeTab === 'swipe' && !showFlutterCode
+-                ? 'text-rose-600 dark:text-rose-400 border-b-2 border-rose-500 font-bold'
+-                : ''
+-            }`}
+-          >
+-            Discover
+-          </button>
+-          <button
+-            onClick={() => {
+-              setActiveTab('explore');
+-              setShowFlutterCode(false);
+-            }}
+-            className={`transition-colors whitespace-nowrap shrink-0 hover:text-stone-900 dark:hover:text-white pb-0.5 ${
+-              activeTab === 'explore' && !showFlutterCode
+-                ? 'text-rose-600 dark:text-rose-400 border-b-2 border-rose-500 font-bold'
+-                : ''
+-            }`}
+-          >
+-            Explore Passions
+-          </button>
+-          <button
+-            onClick={() => {
+-              setActiveTab('matches');
+-              setShowFlutterCode(false);
+-            }}
+-            className={`transition-colors whitespace-nowrap shrink-0 hover:text-stone-900 dark:hover:text-white pb-0.5 flex items-center gap-1.5 ${
+-              activeTab === 'matches' && !showFlutterCode
+-                ? 'text-rose-600 dark:text-rose-400 border-b-2 border-rose-500 font-bold'
+-                : ''
+-            }`}
+-          >
+-            <span>Conversations</span>
+-            {matchesCount > 0 && (
+-              <span className="w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center">
+-                {matchesCount}
+-              </span>
+-            )}
+-          </button>
+-          <button
+-            onClick={() => {
+-              setActiveTab('profile');
+-              setShowFlutterCode(false);
+-            }}
+-            className={`transition-colors whitespace-nowrap shrink-0 hover:text-stone-900 dark:hover:text-white pb-0.5 ${
+-              activeTab === 'profile' && !showFlutterCode
+-                ? 'text-rose-600 dark:text-rose-400 border-b-2 border-rose-500 font-bold'
+-                : ''
+-            }`}
+-          >
+-            My Profile
+-          </button>
+-        </nav>
+-
+-        {/* Zone 3: 1 Primary Action + Utility Controls */}
+-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+-          {/* Device Frame Viewport Switcher */}
+-          <div className="hidden lg:flex items-center p-0.5 bg-stone-100 dark:bg-stone-800 rounded-lg text-xs">
+-            <button
+-              onClick={() => setDeviceMode('mobile')}
+-              className={`px-2.5 py-1 rounded-md transition-colors flex items-center gap-1 font-medium ${
+-                deviceMode === 'mobile'
+-                  ? 'bg-white dark:bg-stone-900 text-stone-900 dark:text-white shadow-xs'
+-                  : 'text-stone-500 hover:text-stone-900 dark:text-stone-400'
+-              }`}
+-              title="iOS Frame"
+-            >
+-              <Smartphone className="w-3.5 h-3.5" />
+-              <span>iOS</span>
+-            </button>
+-            <button
+-              onClick={() => setDeviceMode('pixel')}
+-              className={`px-2.5 py-1 rounded-md transition-colors flex items-center gap-1 font-medium ${
+-                deviceMode === 'pixel'
+-                  ? 'bg-white dark:bg-stone-900 text-stone-900 dark:text-white shadow-xs'
+-                  : 'text-stone-500 hover:text-stone-900 dark:text-stone-400'
+-              }`}
+-              title="Android Pixel Frame"
+-            >
+-              <span>Pixel</span>
+-            </button>
+-            <button
+-              onClick={() => setDeviceMode('fullscreen')}
+-              className={`px-2.5 py-1 rounded-md transition-colors flex items-center gap-1 font-medium ${
+-                deviceMode === 'fullscreen'
+-                  ? 'bg-white dark:bg-stone-900 text-stone-900 dark:text-white shadow-xs'
+-                  : 'text-stone-500 hover:text-stone-900 dark:text-stone-400'
+-              }`}
+-              title="Full Width Web View"
+-            >
+-              <span>Full View</span>
+-            </button>
+-          </div>
+-
+-          {/* Quick Filter trigger */}
+-          <button
+-            onClick={onOpenFilter}
+-            className="p-2 text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-white rounded-lg hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+-            title="Filter preferences"
+-            aria-label="Filter dating preferences"
+-          >
+-            <SlidersHorizontal className="w-4 h-4" />
+-          </button>
+-
+-          {/* Dark / Light Mode Toggle */}
+-          <button
+-            onClick={() => setIsDarkMode(!isDarkMode)}
+-            className="p-2 text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-white rounded-lg hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+-            title={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+-            aria-label="Toggle theme"
+-          >
+-            {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+-          </button>
+-
+-          {/* Primary Action Button: Flutter & Dart Codebase */}
+-          <button
+-            onClick={() => setShowFlutterCode(!showFlutterCode)}
+-            className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 shadow-xs ${
+-              showFlutterCode
+-                ? 'bg-rose-600 text-white shadow-rose-600/20'
+-                : 'bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 hover:bg-stone-800 dark:hover:bg-white'
+-            }`}
+-          >
+-            <Code2 className="w-3.5 h-3.5" />
+-            <span>{showFlutterCode ? 'Mobile App View' : 'Flutter / Dart Source'}</span>
+-          </button>
+-        </div>
+-      </div>
+-    </header>
+-  );
+-};
+diff --git a/src/components/UserProfileView.tsx b/src/components/UserProfileView.tsx
+index fd31698..bd5f3bf 100644
+--- a/src/components/UserProfileView.tsx
++++ b/src/components/UserProfileView.tsx
+@@ -14,6 +14,7 @@ import {
+   LogOut,
+   Sparkles,
+   ShieldCheck,
++  Code2,
+ } from 'lucide-react';
+ import { EditableUserProfile } from './EditProfileModal';
  
- interface TopBarProps {
-   activeTab: 'swipe' | 'explore' | 'matches' | 'profile';
-@@ -12,6 +12,8 @@ interface TopBarProps {
-   setDeviceMode: (mode: 'mobile' | 'pixel' | 'fullscreen') => void;
-   onOpenFilter: () => void;
-   matchesCount: number;
-+  notificationsCount: number;
-+  onOpenNotifications: () => void;
+@@ -29,6 +30,7 @@ interface UserProfileViewProps {
+   onOpenAuth: () => void;
+   onSignOut: () => void;
+   onOpenAlgorithm: () => void;
++  onViewFlutterCode?: () => void;
  }
  
- export const TopBar: React.FC<TopBarProps> = ({
-@@ -25,6 +27,8 @@ export const TopBar: React.FC<TopBarProps> = ({
-   setDeviceMode,
-   onOpenFilter,
-   matchesCount,
-+  notificationsCount,
-+  onOpenNotifications,
+ export const UserProfileView: React.FC<UserProfileViewProps> = ({
+@@ -43,6 +45,7 @@ export const UserProfileView: React.FC<UserProfileViewProps> = ({
+   onOpenAuth,
+   onSignOut,
+   onOpenAlgorithm,
++  onViewFlutterCode,
  }) => {
-   return (
-     <header className="sticky top-0 z-40 w-full border-b border-stone-200 dark:border-stone-800 bg-white/95 dark:bg-stone-950/95 backdrop-blur-md">
-@@ -148,6 +152,19 @@ export const TopBar: React.FC<TopBarProps> = ({
+   const [soundEnabled, setSoundEnabled] = useState(true);
+   const [incognito, setIncognito] = useState(false);
+@@ -285,6 +288,27 @@ export const UserProfileView: React.FC<UserProfileViewProps> = ({
              </button>
            </div>
  
-+          {/* Notifications Trigger */}
-+          <button
-+            onClick={onOpenNotifications}
-+            className="relative p-2 text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-white rounded-lg hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
-+            title="Notifications"
-+            aria-label="View notifications"
-+          >
-+            <Bell className="w-4 h-4" />
-+            {notificationsCount > 0 && (
-+              <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white dark:ring-stone-950" />
-+            )}
-+          </button>
++          {/* Flutter & Dart Source Code Viewer */}
++          {onViewFlutterCode && (
++            <button
++              onClick={onViewFlutterCode}
++              className="w-full p-3.5 flex items-center justify-between text-left hover:bg-stone-50 dark:hover:bg-stone-800 transition-colors text-stone-800 dark:text-stone-200 cursor-pointer"
++            >
++              <div className="flex items-center gap-3">
++                <Code2 className="w-4 h-4 text-stone-400" />
++                <div>
++                  <div className="text-xs font-semibold text-stone-900 dark:text-white">
++                    Flutter & Dart Architecture Source
++                  </div>
++                  <div className="text-[11px] text-stone-400">
++                    Review Flutter architecture, tests & services
++                  </div>
++                </div>
++              </div>
++              <span className="text-xs font-semibold text-rose-600">View Source</span>
++            </button>
++          )}
 +
-           {/* Quick Filter trigger */}
-           <button
-             onClick={onOpenFilter}
-diff --git a/src/data/flutterCode.ts b/src/data/flutterCode.ts
-index 71e074a..bc938ae 100644
---- a/src/data/flutterCode.ts
-+++ b/src/data/flutterCode.ts
-@@ -73,9 +73,10 @@ dependencies:
-   flutter_facebook_auth: ^7.1.1
-   flutter_secure_storage: ^9.2.2
- 
--  # Media & Profile Management
-+  # Media, Notifications & Profile Management
-   image_picker: ^1.1.2
-   audioplayers: ^6.0.0
-+  flutter_local_notifications: ^17.1.2
- 
- dev_dependencies:
-   flutter_test:
-@@ -1126,6 +1127,487 @@ class LoverProfile {
-     );
-   }
- }
-+`,
-+  },
-+  {
-+    path: 'lib/models/app_notification.dart',
-+    filename: 'app_notification.dart',
-+    language: 'dart',
-+    description: 'Data model for in-app and push notifications (matches, messages, events)',
-+    content: `enum NotificationType {
-+  newMatch,
-+  message,
-+  superLike,
-+  dateInvite,
-+  marchingEvent,
-+  chemistryAlert,
-+}
-+
-+class AppNotification {
-+  final String id;
-+  final NotificationType type;
-+  final String title;
-+  final String body;
-+  final DateTime timestamp;
-+  final bool read;
-+  final String? senderId;
-+  final String? senderName;
-+  final String? senderAvatar;
-+  final String? actionRoute;
-+  final Map<String, dynamic>? metadata;
-+
-+  const AppNotification({
-+    required this.id,
-+    required this.type,
-+    required this.title,
-+    required this.body,
-+    required this.timestamp,
-+    this.read = false,
-+    this.senderId,
-+    this.senderName,
-+    this.senderAvatar,
-+    this.actionRoute,
-+    this.metadata,
-+  });
-+
-+  AppNotification copyWith({
-+    String? id,
-+    NotificationType? type,
-+    String? title,
-+    String? body,
-+    DateTime? timestamp,
-+    bool? read,
-+    String? senderId,
-+    String? senderName,
-+    String? senderAvatar,
-+    String? actionRoute,
-+    Map<String, dynamic>? metadata,
-+  }) {
-+    return AppNotification(
-+      id: id ?? this.id,
-+      type: type ?? this.type,
-+      title: title ?? this.title,
-+      body: body ?? this.body,
-+      timestamp: timestamp ?? this.timestamp,
-+      read: read ?? this.read,
-+      senderId: senderId ?? this.senderId,
-+      senderName: senderName ?? this.senderName,
-+      senderAvatar: senderAvatar ?? this.senderAvatar,
-+      actionRoute: actionRoute ?? this.actionRoute,
-+      metadata: metadata ?? this.metadata,
-+    );
-+  }
-+}
-+`,
-+  },
-+  {
-+    path: 'lib/services/notification_service.dart',
-+    filename: 'notification_service.dart',
-+    language: 'dart',
-+    description: 'Notification Provider with FlutterLocalNotificationsPlugin integration & state',
-+    content: `import 'package:flutter/foundation.dart';
-+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-+import '../models/app_notification.dart';
-+
-+class NotificationPreferences {
-+  final bool matchAlerts;
-+  final bool messageAlerts;
-+  final bool marchingAlerts;
-+  final bool soundEnabled;
-+  final bool vibrationEnabled;
-+
-+  const NotificationPreferences({
-+    this.matchAlerts = true,
-+    this.messageAlerts = true,
-+    this.marchingAlerts = true,
-+    this.soundEnabled = true,
-+    this.vibrationEnabled = true,
-+  });
-+
-+  NotificationPreferences copyWith({
-+    bool? matchAlerts,
-+    bool? messageAlerts,
-+    bool? marchingAlerts,
-+    bool? soundEnabled,
-+    bool? vibrationEnabled,
-+  }) {
-+    return NotificationPreferences(
-+      matchAlerts: matchAlerts ?? this.matchAlerts,
-+      messageAlerts: messageAlerts ?? this.messageAlerts,
-+      marchingAlerts: marchingAlerts ?? this.marchingAlerts,
-+      soundEnabled: soundEnabled ?? this.soundEnabled,
-+      vibrationEnabled: vibrationEnabled ?? this.vibrationEnabled,
-+    );
-+  }
-+}
-+
-+class NotificationService extends ChangeNotifier {
-+  final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
-+
-+  List<AppNotification> _notifications = [];
-+  NotificationPreferences _preferences = const NotificationPreferences();
-+  bool _isInitialized = false;
-+
-+  List<AppNotification> get notifications => List.unmodifiable(_notifications);
-+  NotificationPreferences get preferences => _preferences;
-+  int get unreadCount => _notifications.where((n) => !n.read).length;
-+
-+  Future<void> initialize() async {
-+    if (_isInitialized) return;
-+
-+    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-+    const iosSettings = DarwinInitializationSettings(
-+      requestAlertPermission: true,
-+      requestBadgePermission: true,
-+      requestSoundPermission: true,
-+    );
-+
-+    const initSettings = InitializationSettings(android: androidSettings, iOS: iosSettings);
-+    await _localNotifications.initialize(initSettings);
-+    _isInitialized = true;
-+    notifyListeners();
-+  }
-+
-+  void addNotification(AppNotification notification) {
-+    _notifications = [notification, ..._notifications];
-+    notifyListeners();
-+
-+    // Trigger local push banner if preferences allow
-+    if (_shouldTriggerPush(notification.type)) {
-+      _showLocalPush(notification);
-+    }
-+  }
-+
-+  bool _shouldTriggerPush(NotificationType type) {
-+    switch (type) {
-+      case NotificationType.newMatch:
-+      case NotificationType.superLike:
-+      case NotificationType.chemistryAlert:
-+        return _preferences.matchAlerts;
-+      case NotificationType.message:
-+      case NotificationType.dateInvite:
-+        return _preferences.messageAlerts;
-+      case NotificationType.marchingEvent:
-+        return _preferences.marchingAlerts;
-+    }
-+  }
-+
-+  Future<void> _showLocalPush(AppNotification notification) async {
-+    const androidDetails = AndroidNotificationDetails(
-+      'amora_notifications',
-+      'Amora Alerts',
-+      channelDescription: 'Matches, messages and marching cadence alerts',
-+      importance: Importance.high,
-+      priority: Priority.high,
-+    );
-+    const iosDetails = DarwinNotificationDetails();
-+    const details = NotificationDetails(android: androidDetails, iOS: iosDetails);
-+
-+    await _localNotifications.show(
-+      notification.id.hashCode,
-+      notification.title,
-+      notification.body,
-+      details,
-+    );
-+  }
-+
-+  void markAsRead(String id) {
-+    _notifications = _notifications.map((n) {
-+      if (n.id == id) return n.copyWith(read: true);
-+      return n;
-+    }).toList();
-+    notifyListeners();
-+  }
-+
-+  void markAllAsRead() {
-+    _notifications = _notifications.map((n) => n.copyWith(read: true)).toList();
-+    notifyListeners();
-+  }
-+
-+  void deleteNotification(String id) {
-+    _notifications = _notifications.where((n) => n.id != id).toList();
-+    notifyListeners();
-+  }
-+
-+  void updatePreferences(NotificationPreferences newPrefs) {
-+    _preferences = newPrefs;
-+    notifyListeners();
-+  }
-+}
-+`,
-+  },
-+  {
-+    path: 'lib/screens/notifications_screen.dart',
-+    filename: 'notifications_screen.dart',
-+    language: 'dart',
-+    description: 'Flutter Notification Hub: Categories, unread counters, swipe-to-dismiss & preferences',
-+    content: `import 'package:flutter/material.dart';
-+import 'package:provider/provider.dart';
-+import '../services/notification_service.dart';
-+import '../models/app_notification.dart';
-+
-+class NotificationsScreen extends StatefulWidget {
-+  const NotificationsScreen({super.key});
-+
-+  @override
-+  State<NotificationsScreen> createState() => _NotificationsScreenState();
-+}
-+
-+class _NotificationsScreenState extends State<NotificationsScreen> with SingleTickerProviderStateMixin {
-+  late TabController _tabController;
-+
-+  @override
-+  void initState() {
-+    super.initState();
-+    _tabController = TabController(length: 4, vsync: this);
-+  }
-+
-+  @override
-+  void dispose() {
-+    _tabController.dispose();
-+    super.dispose();
-+  }
-+
-+  IconData _getTypeIcon(NotificationType type) {
-+    switch (type) {
-+      case NotificationType.newMatch:
-+        return Icons.favorite;
-+      case NotificationType.superLike:
-+        return Icons.star;
-+      case NotificationType.message:
-+        return Icons.chat_bubble;
-+      case NotificationType.dateInvite:
-+        return Icons.calendar_today;
-+      case NotificationType.marchingEvent:
-+        return Icons.music_note;
-+      case NotificationType.chemistryAlert:
-+        return Icons.auto_awesome;
-+    }
-+  }
-+
-+  Color _getTypeColor(NotificationType type) {
-+    switch (type) {
-+      case NotificationType.newMatch:
-+      case NotificationType.chemistryAlert:
-+        return const Color(0xFFE11D48);
-+      case NotificationType.superLike:
-+        return Colors.amber.shade700;
-+      case NotificationType.message:
-+        return Colors.blue;
-+      case NotificationType.dateInvite:
-+        return Colors.purple;
-+      case NotificationType.marchingEvent:
-+        return Colors.orange;
-+    }
-+  }
-+
-+  @override
-+  Widget build(BuildContext context) {
-+    final notifService = context.watch<NotificationService>();
-+    final notifications = notifService.notifications;
-+
-+    return Scaffold(
-+      appBar: AppBar(
-+        title: const Text('Notifications'),
-+        bottom: TabBar(
-+          controller: _tabController,
-+          indicatorColor: const Color(0xFFE11D48),
-+          labelColor: const Color(0xFFE11D48),
-+          isScrollable: true,
-+          tabs: const [
-+            Tab(text: 'All'),
-+            Tab(text: 'Matches'),
-+            Tab(text: 'Messages'),
-+            Tab(text: 'Events'),
-+          ],
-+        ),
-+        actions: [
-+          if (notifService.unreadCount > 0)
-+            TextButton.icon(
-+              onPressed: () => notifService.markAllAsRead(),
-+              icon: const Icon(Icons.done_all, size: 18),
-+              label: const Text('Mark read'),
-+            ),
-+        ],
-+      ),
-+      body: TabBarView(
-+        controller: _tabController,
-+        children: [
-+          _buildList(notifications, notifService),
-+          _buildList(
-+            notifications.where((n) => n.type == NotificationType.newMatch || n.type == NotificationType.superLike).toList(),
-+            notifService,
-+          ),
-+          _buildList(
-+            notifications.where((n) => n.type == NotificationType.message || n.type == NotificationType.dateInvite).toList(),
-+            notifService,
-+          ),
-+          _buildList(
-+            notifications.where((n) => n.type == NotificationType.marchingEvent).toList(),
-+            notifService,
-+          ),
-+        ],
-+      ),
-+    );
-+  }
-+
-+  Widget _buildList(List<AppNotification> items, NotificationService service) {
-+    if (items.isEmpty) {
-+      return const Center(
-+        child: Column(
-+          mainAxisSize: MainAxisSize.min,
-+          children: [
-+            Icon(Icons.notifications_none, size: 54, color: Colors.grey),
-+            SizedBox(height: 12),
-+            Text('No notifications here', style: TextStyle(color: Colors.grey)),
-+          ],
-+        ),
-+      );
-+    }
-+
-+    return ListView.separated(
-+      padding: const EdgeInsets.symmetric(vertical: 8),
-+      itemCount: items.length,
-+      separatorBuilder: (_, __) => const Divider(height: 1),
-+      itemBuilder: (context, index) {
-+        final item = items[index];
-+        return Dismissible(
-+          key: Key(item.id),
-+          direction: DismissDirection.endToStart,
-+          background: Container(
-+            color: Colors.red,
-+            alignment: Alignment.centerRight,
-+            padding: const EdgeInsets.only(right: 20),
-+            child: const Icon(Icons.delete, color: Colors.white),
-+          ),
-+          onDismissed: (_) => service.deleteNotification(item.id),
-+          child: ListTile(
-+            tileColor: item.read ? null : const Color(0xFFE11D48).withOpacity(0.04),
-+            leading: CircleAvatar(
-+              backgroundColor: _getTypeColor(item.type).withOpacity(0.15),
-+              child: Icon(_getTypeIcon(item.type), color: _getTypeColor(item.type), size: 20),
-+            ),
-+            title: Text(
-+              item.title,
-+              style: TextStyle(fontWeight: item.read ? FontWeight.normal : FontWeight.bold),
-+            ),
-+            subtitle: Text(item.body, maxLines: 2, overflow: TextOverflow.ellipsis),
-+            trailing: item.read
-+                ? null
-+                : Container(
-+                    width: 8,
-+                    height: 8,
-+                    decoration: const BoxDecoration(
-+                      color: Color(0xFFE11D48),
-+                      shape: BoxShape.circle,
-+                    ),
-+                  ),
-+            onTap: () {
-+              if (!item.read) service.markAsRead(item.id);
-+            },
-+          ),
-+        );
-+      },
-+    );
-+  }
-+}
-+`,
-+  },
-+  {
-+    path: 'test/notification_service_test.dart',
-+    filename: 'notification_service_test.dart',
-+    language: 'dart',
-+    description: 'Unit tests for NotificationService (unread calculation, mark read, dismissal)',
-+    content: `import 'package:flutter_test/flutter_test.dart';
-+import 'package:amora_dating_app/models/app_notification.dart';
-+import 'package:amora_dating_app/services/notification_service.dart';
-+
-+void main() {
-+  group('NotificationService Tests', () {
-+    late NotificationService service;
-+
-+    setUp(() {
-+      service = NotificationService();
-+    });
-+
-+    test('Initial notification list is empty with 0 unread', () {
-+      expect(service.notifications.isEmpty, true);
-+      expect(service.unreadCount, 0);
-+    });
-+
-+    test('Adding unread notification increments unreadCount', () {
-+      final notif = AppNotification(
-+        id: 'n1',
-+        type: NotificationType.newMatch,
-+        title: 'New Match!',
-+        body: 'You and Sophia liked each other.',
-+        timestamp: DateTime.now(),
-+        read: false,
-+      );
-+
-+      service.addNotification(notif);
-+      expect(service.notifications.length, 1);
-+      expect(service.unreadCount, 1);
-+    });
-+
-+    test('Marking notification as read decrements unreadCount', () {
-+      final notif = AppNotification(
-+        id: 'n2',
-+        type: NotificationType.message,
-+        title: 'New Message',
-+        body: 'Hey Liam, see you at the brass fanfare!',
-+        timestamp: DateTime.now(),
-+        read: false,
-+      );
-+
-+      service.addNotification(notif);
-+      expect(service.unreadCount, 1);
-+
-+      service.markAsRead('n2');
-+      expect(service.unreadCount, 0);
-+      expect(service.notifications.first.read, true);
-+    });
-+
-+    test('Mark all as read sets all items read to true', () {
-+      service.addNotification(AppNotification(
-+        id: 'n3',
-+        type: NotificationType.superLike,
-+        title: 'Super Like',
-+        body: 'Someone super liked you.',
-+        timestamp: DateTime.now(),
-+        read: false,
-+      ));
-+      service.addNotification(AppNotification(
-+        id: 'n4',
-+        type: NotificationType.marchingEvent,
-+        title: 'Marching Parade',
-+        body: 'Annual drumline rehearsal this Sunday.',
-+        timestamp: DateTime.now(),
-+        read: false,
-+      ));
-+
-+      expect(service.unreadCount, 2);
-+      service.markAllAsRead();
-+      expect(service.unreadCount, 0);
-+    });
-+
-+    test('Deleting notification removes it from list', () {
-+      service.addNotification(AppNotification(
-+        id: 'n5',
-+        type: NotificationType.dateInvite,
-+        title: 'Date Invite',
-+        body: 'Coffee walk?',
-+        timestamp: DateTime.now(),
-+        read: false,
-+      ));
-+
-+      expect(service.notifications.length, 1);
-+      service.deleteNotification('n5');
-+      expect(service.notifications.isEmpty, true);
-+    });
-+  });
-+}
- `,
-   },
- ];
-+
+           {/* Auth Action Row */}
+           {loggedInUser ? (
+             <button
 diff --git a/src/types/index.ts b/src/types/index.ts
-index a0012d3..44304c1 100644
+index a0012d3..9d02d09 100644
 --- a/src/types/index.ts
 +++ b/src/types/index.ts
-@@ -60,3 +60,34 @@ export interface ChatThread {
+@@ -60,3 +60,35 @@ export interface ChatThread {
    messages: ChatMessage[];
    isMatchNew?: boolean;
  }
@@ -2227,9 +2184,10 @@ index a0012d3..44304c1 100644
 +export type NotificationType =
 +  | 'new_match'
 +  | 'message'
-+  | 'super_like'
-+  | 'date_invite'
 +  | 'marching_event'
++  | 'super_like'
++  | 'system'
++  | 'date_invite'
 +  | 'chemistry_alert';
 +
 +export interface AppNotification {
@@ -2242,8 +2200,8 @@ index a0012d3..44304c1 100644
 +  senderId?: string;
 +  senderName?: string;
 +  senderAvatar?: string;
-+  actionRoute?: string;
 +  relatedProfileId?: string;
++  actionRoute?: string;
 +}
 +
 +export interface NotificationSettings {
