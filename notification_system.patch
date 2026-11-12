@@ -1,0 +1,2259 @@
+From 03024ba2866e15d710c2cc07ef8f9eaa616fa319 Mon Sep 17 00:00:00 2001
+From: EmyBenny <uzorbenny51@gmail.com>
+Date: Wed, 11 Nov 2026 16:14:02 +0000
+Subject: [PATCH] feat(notifications): implement notification system with local
+ push and preferences hub
+
+---
+ README.md                                     |  25 +-
+ flutter_project/lib/main.dart                 | 139 +++++
+ .../lib/models/app_notification.dart          |  64 +++
+ flutter_project/lib/models/lover_profile.dart |  93 ++++
+ .../lib/screens/notifications_screen.dart     | 170 ++++++
+ .../lib/services/auth_service.dart            | 137 +++++
+ .../lib/services/matching_algorithm.dart      | 131 +++++
+ .../lib/services/notification_service.dart    | 129 +++++
+ flutter_project/pubspec.yaml                  |  42 ++
+ .../test/notification_service_test.dart       |  89 ++++
+ src/App.tsx                                   | 140 ++++-
+ src/components/NotificationsModal.tsx         | 320 ++++++++++++
+ src/components/TopBar.tsx                     |  19 +-
+ src/data/flutterCode.ts                       | 484 +++++++++++++++++-
+ src/types/index.ts                            |  31 ++
+ 15 files changed, 2006 insertions(+), 7 deletions(-)
+ create mode 100644 flutter_project/lib/main.dart
+ create mode 100644 flutter_project/lib/models/app_notification.dart
+ create mode 100644 flutter_project/lib/models/lover_profile.dart
+ create mode 100644 flutter_project/lib/screens/notifications_screen.dart
+ create mode 100644 flutter_project/lib/services/auth_service.dart
+ create mode 100644 flutter_project/lib/services/matching_algorithm.dart
+ create mode 100644 flutter_project/lib/services/notification_service.dart
+ create mode 100644 flutter_project/pubspec.yaml
+ create mode 100644 flutter_project/test/notification_service_test.dart
+ create mode 100644 src/components/NotificationsModal.tsx
+
+diff --git a/README.md b/README.md
+index 2f00dfb..8701606 100644
+--- a/README.md
++++ b/README.md
+@@ -50,6 +50,17 @@
+ - **Interactive Messenger**: Real-time chat bubbles, simulated audio voice notes, and automated replies.
+ - **Date Invitation Widget**: Single-tap in-chat date proposal (e.g., "Grab iced cortados at Velvet Coffee on Friday").
+ 
++### 6. Notification System (`feature/notification-system`)
++- **Domain Categories**:
++  - `new_match`: High-compatibility mutual match alerts with avatar and chemistry percentage.
++  - `message`: Real-time chat message previews and quick conversation navigation.
++  - `super_like`: Priority alerts when a lover super-likes your profile.
++  - `date_invite`: Date rendezvous proposals with time and venue.
++  - `marching_event`: Community rehearsal, parade, and brass festival announcements.
++- **Push & Local Alerts**: Integrated via `flutter_local_notifications` with configurable system notification channels.
++- **Unread & Deep Linking**: Unread count badge on top bar and navigation, mark all read, swipe-to-dismiss, and direct deep-linking to chat or candidate profile.
++- **Granular Preferences**: Independent toggles for match alerts, message alerts, marching events, sound, and vibration.
++
+ ---
+ 
+ ## 📂 Repository File Tree
+@@ -86,6 +97,7 @@
+ │   │   ├── EditProfileModal.tsx          # Full profile editor (photos, bio, interests, preferences)
+ │   │   ├── AuthModal.tsx                 # Email/Password, Google & Facebook sign-in modal
+ │   │   ├── AlgorithmExplainerModal.tsx   # Detailed match chemistry formula breakdown
++│   │   ├── NotificationsModal.tsx        # In-app notification center & preferences hub
+ │   │   ├── MatchCelebrationModal.tsx     # "It's a Match!" celebration modal with confetti
+ │   │   ├── ChatView.tsx                  # Interactive messenger with simulated responses
+ │   │   ├── ExploreGrid.tsx               # Curated match collections by interest
+@@ -101,21 +113,26 @@
+ │           └── dating_lovers_hero_*.jpg
+ │
+ └── flutter_project/                      # Generated Flutter Source Files (also viewable in-app)
+-    ├── pubspec.yaml                      # Flutter dependencies and asset configuration
++    ├── pubspec.yaml                      # Flutter dependencies (local_notifications, auth, etc.)
+     ├── lib/
+     │   ├── main.dart                     # Flutter application entry point & ThemeData
+     │   ├── models/
+-    │   │   └── lover_profile.dart        # Strongly-typed Dart data classes
++    │   │   ├── lover_profile.dart        # Strongly-typed LoverProfile data classes
++    │   │   └── app_notification.dart     # Notification models & NotificationType enum
+     │   ├── services/
+     │   │   ├── matching_algorithm.dart   # Pure Dart DatingMatchingEngine class
+-    │   │   └── auth_service.dart         # FirebaseAuth, GoogleSignIn, FacebookAuth & SecureStorage
++    │   │   ├── auth_service.dart         # FirebaseAuth, GoogleSignIn, FacebookAuth & SecureStorage
++    │   │   └── notification_service.dart # Notification Provider & LocalNotificationsPlugin
+     │   ├── screens/
+     │   │   ├── auth_screen.dart          # Tabbed Login / Sign-up UI with social buttons
+     │   │   ├── discover_swipe_screen.dart# Flutter CardSwiper with like/pass callbacks
+-    │   │   └── profile_edit_screen.dart  # ImagePicker, Bio, Chips & Preference Sliders
++    │   │   ├── profile_edit_screen.dart  # ImagePicker, Bio, Chips & Preference Sliders
++    │   │   └── notifications_screen.dart # Notification center with tabs & swipe dismiss
+     │   └── widgets/
+     │       ├── swipe_card.dart           # Card presentation with scrims and badge overlays
+     │       └── match_dialog.dart         # Mutual attraction celebration dialog
++    └── test/
++        └── notification_service_test.dart# Unit tests for notification stream & unread logic
+ ```
+ 
+ ---
+diff --git a/flutter_project/lib/main.dart b/flutter_project/lib/main.dart
+new file mode 100644
+index 0000000..89388af
+--- /dev/null
++++ b/flutter_project/lib/main.dart
+@@ -0,0 +1,139 @@
++import 'package:flutter/material.dart';
++import 'package:flutter/services.dart';
++import 'package:google_fonts/google_fonts.dart';
++import 'package:provider/provider.dart';
++import 'screens/discover_swipe_screen.dart';
++import 'screens/matches_screen.dart';
++import 'screens/explore_screen.dart';
++import 'screens/profile_screen.dart';
++import 'screens/notifications_screen.dart';
++import 'services/auth_service.dart';
++import 'services/notification_service.dart';
++
++void main() {
++  WidgetsFlutterBinding.ensureInitialized();
++  SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
++  runApp(
++    MultiProvider(
++      providers: [
++        ChangeNotifierProvider(create: (_) => AuthService()),
++        ChangeNotifierProvider(create: (_) => NotificationService()..initialize()),
++      ],
++      child: const AmoraDatingApp(),
++    ),
++  );
++}
++
++class AmoraDatingApp extends StatelessWidget {
++  const AmoraDatingApp({super.key});
++
++  @override
++  Widget build(BuildContext context) {
++    return MaterialApp(
++      title: 'Amora - Dating & Matching Lovers',
++      debugShowCheckedModeBanner: false,
++      themeMode: ThemeMode.system,
++      theme: ThemeData(
++        useMaterial3: true,
++        brightness: Brightness.light,
++        scaffoldBackgroundColor: const Color(0xFFFAF9F6),
++        colorScheme: ColorScheme.fromSeed(
++          seedColor: const Color(0xFFE11D48),
++          primary: const Color(0xFFE11D48),
++          surface: Colors.white,
++        ),
++        textTheme: GoogleFonts.plusJakartaSansTextTheme(ThemeData.light().textTheme),
++      ),
++      darkTheme: ThemeData(
++        useMaterial3: true,
++        brightness: Brightness.dark,
++        scaffoldBackgroundColor: const Color(0xFF090D16),
++        colorScheme: ColorScheme.fromSeed(
++          brightness: Brightness.dark,
++          seedColor: const Color(0xFFF43F5E),
++          primary: const Color(0xFFF43F5E),
++          surface: const Color(0xFF131B2E),
++        ),
++        textTheme: GoogleFonts.plusJakartaSansTextTheme(ThemeData.dark().textTheme),
++      ),
++      home: const MainNavigationShell(),
++    );
++  }
++}
++
++class MainNavigationShell extends StatefulWidget {
++  const MainNavigationShell({super.key});
++
++  @override
++  State<MainNavigationShell> createState() => _MainNavigationShellState();
++}
++
++class _MainNavigationShellState extends State<MainNavigationShell> {
++  int _currentIndex = 0;
++
++  final List<Widget> _screens = const [
++    DiscoverSwipeScreen(),
++    ExploreScreen(),
++    MatchesScreen(),
++    NotificationsScreen(),
++    ProfileScreen(),
++  ];
++
++  @override
++  Widget build(BuildContext context) {
++    final isDark = Theme.of(context).brightness == Brightness.dark;
++    final unreadNotifs = context.watch<NotificationService>().unreadCount;
++
++    return Scaffold(
++      body: IndexedStack(
++        index: _currentIndex,
++        children: _screens,
++      ),
++      bottomNavigationBar: NavigationBar(
++        selectedIndex: _currentIndex,
++        onDestinationSelected: (index) {
++          HapticFeedback.selectionClick();
++          setState(() => _currentIndex = index);
++        },
++        height: 64,
++        backgroundColor: isDark ? const Color(0xFF0F172A) : Colors.white,
++        indicatorColor: const Color(0xFFF43F5E).withOpacity(0.15),
++        destinations: [
++          const NavigationDestination(
++            icon: Icon(Icons.favorite_border),
++            selectedIcon: Icon(Icons.favorite, color: Color(0xFFE11D48)),
++            label: 'Discover',
++          ),
++          const NavigationDestination(
++            icon: Icon(Icons.explore_outlined),
++            selectedIcon: Icon(Icons.explore, color: Color(0xFFE11D48)),
++            label: 'Explore',
++          ),
++          const NavigationDestination(
++            icon: Icon(Icons.chat_bubble_outline),
++            selectedIcon: Icon(Icons.chat_bubble, color: Color(0xFFE11D48)),
++            label: 'Matches',
++          ),
++          NavigationDestination(
++            icon: Badge(
++              isLabelVisible: unreadNotifs > 0,
++              label: Text('$unreadNotifs'),
++              child: const Icon(Icons.notifications_none),
++            ),
++            selectedIcon: Badge(
++              isLabelVisible: unreadNotifs > 0,
++              label: Text('$unreadNotifs'),
++              child: const Icon(Icons.notifications, color: Color(0xFFE11D48)),
++            ),
++            label: 'Alerts',
++          ),
++          const NavigationDestination(
++            icon: Icon(Icons.person_outline),
++            selectedIcon: Icon(Icons.person, color: Color(0xFFE11D48)),
++            label: 'Profile',
++          ),
++        ],
++      ),
++    );
++  }
++}
+diff --git a/flutter_project/lib/models/app_notification.dart b/flutter_project/lib/models/app_notification.dart
+new file mode 100644
+index 0000000..abf45dc
+--- /dev/null
++++ b/flutter_project/lib/models/app_notification.dart
+@@ -0,0 +1,64 @@
++enum NotificationType {
++  newMatch,
++  message,
++  superLike,
++  dateInvite,
++  marchingEvent,
++  chemistryAlert,
++}
++
++class AppNotification {
++  final String id;
++  final NotificationType type;
++  final String title;
++  final String body;
++  final DateTime timestamp;
++  final bool read;
++  final String? senderId;
++  final String? senderName;
++  final String? senderAvatar;
++  final String? actionRoute;
++  final Map<String, dynamic>? metadata;
++
++  const AppNotification({
++    required this.id,
++    required this.type,
++    required this.title,
++    required this.body,
++    required this.timestamp,
++    this.read = false,
++    this.senderId,
++    this.senderName,
++    this.senderAvatar,
++    this.actionRoute,
++    this.metadata,
++  });
++
++  AppNotification copyWith({
++    String? id,
++    NotificationType? type,
++    String? title,
++    String? body,
++    DateTime? timestamp,
++    bool? read,
++    String? senderId,
++    String? senderName,
++    String? senderAvatar,
++    String? actionRoute,
++    Map<String, dynamic>? metadata,
++  }) {
++    return AppNotification(
++      id: id ?? this.id,
++      type: type ?? this.type,
++      title: title ?? this.title,
++      body: body ?? this.body,
++      timestamp: timestamp ?? this.timestamp,
++      read: read ?? this.read,
++      senderId: senderId ?? this.senderId,
++      senderName: senderName ?? this.senderName,
++      senderAvatar: senderAvatar ?? this.senderAvatar,
++      actionRoute: actionRoute ?? this.actionRoute,
++      metadata: metadata ?? this.metadata,
++    );
++  }
++}
+diff --git a/flutter_project/lib/models/lover_profile.dart b/flutter_project/lib/models/lover_profile.dart
+new file mode 100644
+index 0000000..9c3c8db
+--- /dev/null
++++ b/flutter_project/lib/models/lover_profile.dart
+@@ -0,0 +1,93 @@
++class DatingPrompt {
++  final String question;
++  final String answer;
++
++  const DatingPrompt({
++    required this.question,
++    required this.answer,
++  });
++}
++
++class LoverProfile {
++  final String id;
++  final String name;
++  final int age;
++  final String gender;
++  final String headline;
++  final String bio;
++  final double distanceKm;
++  final List<String> photos;
++  final bool verified;
++  final int matchScore;
++  final List<String> passions;
++  final String? marchingLoveInterest;
++  final String occupation;
++  final String education;
++  final int heightCm;
++  final String loveLanguage;
++  final String zodiac;
++  final List<DatingPrompt> prompts;
++
++  const LoverProfile({
++    required this.id,
++    required this.name,
++    required this.age,
++    required this.gender,
++    required this.headline,
++    required this.bio,
++    required this.distanceKm,
++    required this.photos,
++    required this.verified,
++    required this.matchScore,
++    required this.passions,
++    this.marchingLoveInterest,
++    required this.occupation,
++    required this.education,
++    required this.heightCm,
++    required this.loveLanguage,
++    required this.zodiac,
++    required this.prompts,
++  });
++
++  LoverProfile copyWith({
++    String? id,
++    String? name,
++    int? age,
++    String? gender,
++    String? headline,
++    String? bio,
++    double? distanceKm,
++    List<String>? photos,
++    bool? verified,
++    int? matchScore,
++    List<String>? passions,
++    String? marchingLoveInterest,
++    String? occupation,
++    String? education,
++    int? heightCm,
++    String? loveLanguage,
++    String? zodiac,
++    List<DatingPrompt>? prompts,
++  }) {
++    return LoverProfile(
++      id: id ?? this.id,
++      name: name ?? this.name,
++      age: age ?? this.age,
++      gender: gender ?? this.gender,
++      headline: headline ?? this.headline,
++      bio: bio ?? this.bio,
++      distanceKm: distanceKm ?? this.distanceKm,
++      photos: photos ?? this.photos,
++      verified: verified ?? this.verified,
++      matchScore: matchScore ?? this.matchScore,
++      passions: passions ?? this.passions,
++      marchingLoveInterest: marchingLoveInterest ?? this.marchingLoveInterest,
++      occupation: occupation ?? this.occupation,
++      education: education ?? this.education,
++      heightCm: heightCm ?? this.heightCm,
++      loveLanguage: loveLanguage ?? this.loveLanguage,
++      zodiac: zodiac ?? this.zodiac,
++      prompts: prompts ?? this.prompts,
++    );
++  }
++}
+diff --git a/flutter_project/lib/screens/notifications_screen.dart b/flutter_project/lib/screens/notifications_screen.dart
+new file mode 100644
+index 0000000..b0a29b8
+--- /dev/null
++++ b/flutter_project/lib/screens/notifications_screen.dart
+@@ -0,0 +1,170 @@
++import 'package:flutter/material.dart';
++import 'package:provider/provider.dart';
++import '../services/notification_service.dart';
++import '../models/app_notification.dart';
++
++class NotificationsScreen extends StatefulWidget {
++  const NotificationsScreen({super.key});
++
++  @override
++  State<NotificationsScreen> createState() => _NotificationsScreenState();
++}
++
++class _NotificationsScreenState extends State<NotificationsScreen> with SingleTickerProviderStateMixin {
++  late TabController _tabController;
++
++  @override
++  void initState() {
++    super.initState();
++    _tabController = TabController(length: 4, vsync: this);
++  }
++
++  @override
++  void dispose() {
++    _tabController.dispose();
++    super.dispose();
++  }
++
++  IconData _getTypeIcon(NotificationType type) {
++    switch (type) {
++      case NotificationType.newMatch:
++        return Icons.favorite;
++      case NotificationType.superLike:
++        return Icons.star;
++      case NotificationType.message:
++        return Icons.chat_bubble;
++      case NotificationType.dateInvite:
++        return Icons.calendar_today;
++      case NotificationType.marchingEvent:
++        return Icons.music_note;
++      case NotificationType.chemistryAlert:
++        return Icons.auto_awesome;
++    }
++  }
++
++  Color _getTypeColor(NotificationType type) {
++    switch (type) {
++      case NotificationType.newMatch:
++      case NotificationType.chemistryAlert:
++        return const Color(0xFFE11D48);
++      case NotificationType.superLike:
++        return Colors.amber.shade700;
++      case NotificationType.message:
++        return Colors.blue;
++      case NotificationType.dateInvite:
++        return Colors.purple;
++      case NotificationType.marchingEvent:
++        return Colors.orange;
++    }
++  }
++
++  @override
++  Widget build(BuildContext context) {
++    final notifService = context.watch<NotificationService>();
++    final notifications = notifService.notifications;
++
++    return Scaffold(
++      appBar: AppBar(
++        title: const Text('Notifications'),
++        bottom: TabBar(
++          controller: _tabController,
++          indicatorColor: const Color(0xFFE11D48),
++          labelColor: const Color(0xFFE11D48),
++          isScrollable: true,
++          tabs: const [
++            Tab(text: 'All'),
++            Tab(text: 'Matches'),
++            Tab(text: 'Messages'),
++            Tab(text: 'Events'),
++          ],
++        ),
++        actions: [
++          if (notifService.unreadCount > 0)
++            TextButton.icon(
++              onPressed: () => notifService.markAllAsRead(),
++              icon: const Icon(Icons.done_all, size: 18),
++              label: const Text('Mark read'),
++            ),
++        ],
++      ),
++      body: TabBarView(
++        controller: _tabController,
++        children: [
++          _buildList(notifications, notifService),
++          _buildList(
++            notifications.where((n) => n.type == NotificationType.newMatch || n.type == NotificationType.superLike).toList(),
++            notifService,
++          ),
++          _buildList(
++            notifications.where((n) => n.type == NotificationType.message || n.type == NotificationType.dateInvite).toList(),
++            notifService,
++          ),
++          _buildList(
++            notifications.where((n) => n.type == NotificationType.marchingEvent).toList(),
++            notifService,
++          ),
++        ],
++      ),
++    );
++  }
++
++  Widget _buildList(List<AppNotification> items, NotificationService service) {
++    if (items.isEmpty) {
++      return const Center(
++        child: Column(
++          mainAxisSize: MainAxisSize.min,
++          children: [
++            Icon(Icons.notifications_none, size: 54, color: Colors.grey),
++            SizedBox(height: 12),
++            Text('No notifications here', style: TextStyle(color: Colors.grey)),
++          ],
++        ),
++      );
++    }
++
++    return ListView.separated(
++      padding: const EdgeInsets.symmetric(vertical: 8),
++      itemCount: items.length,
++      separatorBuilder: (_, __) => const Divider(height: 1),
++      itemBuilder: (context, index) {
++        final item = items[index];
++        return Dismissible(
++          key: Key(item.id),
++          direction: DismissDirection.endToStart,
++          background: Container(
++            color: Colors.red,
++            alignment: Alignment.centerRight,
++            padding: const EdgeInsets.only(right: 20),
++            child: const Icon(Icons.delete, color: Colors.white),
++          ),
++          onDismissed: (_) => service.deleteNotification(item.id),
++          child: ListTile(
++            tileColor: item.read ? null : const Color(0xFFE11D48).withOpacity(0.04),
++            leading: CircleAvatar(
++              backgroundColor: _getTypeColor(item.type).withOpacity(0.15),
++              child: Icon(_getTypeIcon(item.type), color: _getTypeColor(item.type), size: 20),
++            ),
++            title: Text(
++              item.title,
++              style: TextStyle(fontWeight: item.read ? FontWeight.normal : FontWeight.bold),
++            ),
++            subtitle: Text(item.body, maxLines: 2, overflow: TextOverflow.ellipsis),
++            trailing: item.read
++                ? null
++                : Container(
++                    width: 8,
++                    height: 8,
++                    decoration: const BoxDecoration(
++                      color: Color(0xFFE11D48),
++                      shape: BoxShape.circle,
++                    ),
++                  ),
++            onTap: () {
++              if (!item.read) service.markAsRead(item.id);
++            },
++          ),
++        );
++      },
++    );
++  }
++}
+diff --git a/flutter_project/lib/services/auth_service.dart b/flutter_project/lib/services/auth_service.dart
+new file mode 100644
+index 0000000..c276b75
+--- /dev/null
++++ b/flutter_project/lib/services/auth_service.dart
+@@ -0,0 +1,137 @@
++import 'package:flutter/foundation.dart';
++import 'package:firebase_auth/firebase_auth.dart';
++import 'package:google_sign_in/google_sign_in.dart';
++import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
++import 'package:flutter_secure_storage/flutter_secure_storage.dart';
++
++class AuthService extends ChangeNotifier {
++  final FirebaseAuth _auth = FirebaseAuth.instance;
++  final GoogleSignIn _googleSignIn = GoogleSignIn();
++  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage(
++    aOptions: AndroidOptions(encryptedSharedPreferences: true),
++    iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
++  );
++
++  User? _currentUser;
++  bool _isLoading = false;
++
++  User? get currentUser => _currentUser;
++  bool get isAuthenticated => _currentUser != null;
++  bool get isLoading => _isLoading;
++
++  AuthService() {
++    _auth.authStateChanges().listen((user) {
++      _currentUser = user;
++      notifyListeners();
++    });
++  }
++
++  Future<UserCredential> signUpWithEmail({
++    required String email,
++    required String password,
++    required String displayName,
++  }) async {
++    try {
++      _setLoading(true);
++      final cred = await _auth.createUserWithEmailAndPassword(
++        email: email.trim(),
++        password: password,
++      );
++      await cred.user?.updateDisplayName(displayName);
++      await _saveSecureSession(cred.user?.uid ?? '', email, 'email');
++      return cred;
++    } finally {
++      _setLoading(false);
++    }
++  }
++
++  Future<UserCredential> signInWithEmail({
++    required String email,
++    required String password,
++  }) async {
++    try {
++      _setLoading(true);
++      final cred = await _auth.signInWithEmailAndPassword(
++        email: email.trim(),
++        password: password,
++      );
++      await _saveSecureSession(cred.user?.uid ?? '', email, 'email');
++      return cred;
++    } finally {
++      _setLoading(false);
++    }
++  }
++
++  Future<UserCredential?> signInWithGoogle() async {
++    try {
++      _setLoading(true);
++      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
++      if (googleUser == null) return null;
++
++      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
++      final OAuthCredential credential = GoogleAuthProvider.credential(
++        accessToken: googleAuth.accessToken,
++        idToken: googleAuth.idToken,
++      );
++
++      final cred = await _auth.signInWithCredential(credential);
++      await _saveSecureSession(
++        cred.user?.uid ?? '',
++        cred.user?.email ?? '',
++        'google',
++        token: googleAuth.idToken,
++      );
++      return cred;
++    } finally {
++      _setLoading(false);
++    }
++  }
++
++  Future<UserCredential?> signInWithFacebook() async {
++    try {
++      _setLoading(true);
++      final LoginResult result = await FacebookAuth.instance.login(
++        permissions: ['email', 'public_profile'],
++      );
++
++      if (result.status == LoginStatus.success && result.accessToken != null) {
++        final OAuthCredential credential = FacebookAuthProvider.credential(
++          result.accessToken!.tokenString,
++        );
++        final cred = await _auth.signInWithCredential(credential);
++        await _saveSecureSession(
++          cred.user?.uid ?? '',
++          cred.user?.email ?? '',
++          'facebook',
++          token: result.accessToken!.tokenString,
++        );
++        return cred;
++      }
++      return null;
++    } finally {
++      _setLoading(false);
++    }
++  }
++
++  Future<void> _saveSecureSession(String uid, String email, String provider, {String? token}) async {
++    await _secureStorage.write(key: 'auth_uid', value: uid);
++    await _secureStorage.write(key: 'auth_email', value: email);
++    await _secureStorage.write(key: 'auth_provider', value: provider);
++    if (token != null) {
++      await _secureStorage.write(key: 'auth_token', value: token);
++    }
++  }
++
++  Future<void> signOut() async {
++    await _auth.signOut();
++    await _googleSignIn.signOut();
++    await FacebookAuth.instance.logOut();
++    await _secureStorage.deleteAll();
++    notifyListeners();
++  }
++
++  void _setLoading(bool value) {
++    _isLoading = value;
++    notifyListeners();
++  }
++}
+diff --git a/flutter_project/lib/services/matching_algorithm.dart b/flutter_project/lib/services/matching_algorithm.dart
+new file mode 100644
+index 0000000..3e77b1d
+--- /dev/null
++++ b/flutter_project/lib/services/matching_algorithm.dart
+@@ -0,0 +1,131 @@
++import 'dart:math';
++import '../models/lover_profile.dart';
++
++class UserPreferences {
++  final String genderPreference; // 'all', 'female', 'male'
++  final RangeValues ageRange;
++  final double maxDistanceKm;
++  final bool onlyVerified;
++  final String? passionFilter;
++
++  const UserPreferences({
++    this.genderPreference = 'all',
++    this.ageRange = const RangeValues(20, 35),
++    this.maxDistanceKm = 25.0,
++    this.onlyVerified = false,
++    this.passionFilter,
++  });
++}
++
++class CompatibilityResult {
++  final int totalScore; // 0 to 100
++  final int passionScore; // max 40
++  final int marchingBonus; // max 20
++  final int distanceScore; // max 15
++  final int ageScore; // max 15
++  final int loveLanguageScore; // max 10
++  final List<String> sharedPassions;
++  final bool isHardMatch;
++
++  const CompatibilityResult({
++    required this.totalScore,
++    required this.passionScore,
++    required this.marchingBonus,
++    required this.distanceScore,
++    required this.ageScore,
++    required this.loveLanguageScore,
++    required this.sharedPassions,
++    required this.isHardMatch,
++  });
++}
++
++class DatingMatchingEngine {
++  static CompatibilityResult calculateCompatibility({
++    required LoverProfile user,
++    required UserPreferences preferences,
++    required LoverProfile candidate,
++  }) {
++    final genderMatch = preferences.genderPreference == 'all' ||
++        candidate.gender == preferences.genderPreference;
++
++    final ageMatch = candidate.age >= preferences.ageRange.start &&
++        candidate.age <= preferences.ageRange.end;
++
++    final distanceMatch = candidate.distanceKm <= preferences.maxDistanceKm;
++    final verifiedMatch = !preferences.onlyVerified || candidate.verified;
++
++    final isHardMatch = genderMatch && ageMatch && distanceMatch && verifiedMatch;
++
++    final userPassions = user.passions.map((p) => p.toLowerCase().trim()).toSet();
++    final candidatePassions = candidate.passions.map((p) => p.toLowerCase().trim()).toSet();
++
++    final sharedPassions = candidatePassions.intersection(userPassions).toList();
++    final unionCount = userPassions.union(candidatePassions).length;
++
++    final double jaccardRatio = unionCount > 0 ? sharedPassions.length / unionCount : 0.0;
++    final int passionScore = min(40, (jaccardRatio * 60 + sharedPassions.length * 6).round());
++
++    int marchingBonus = 6;
++    const marchingKeywords = ['marching', 'brass', 'trumpet', 'drumline', 'percussion', 'trombone', 'cadence'];
++
++    final bool userHasMarching = user.marchingLoveInterest != null ||
++        user.passions.any((p) => marchingKeywords.any((kw) => p.toLowerCase().contains(kw)));
++    final bool candidateHasMarching = candidate.marchingLoveInterest != null ||
++        candidate.passions.any((p) => marchingKeywords.any((kw) => p.toLowerCase().contains(kw)));
++
++    if (userHasMarching && candidateHasMarching) {
++      marchingBonus = 20;
++    } else if (userHasMarching || candidateHasMarching) {
++      marchingBonus = 12;
++    }
++
++    final double distRatio = max(0.0, 1.0 - (candidate.distanceKm / (preferences.maxDistanceKm * 1.5)));
++    final int distanceScore = (5 + distRatio * 10).round();
++
++    final double targetMidAge = (preferences.ageRange.start + preferences.ageRange.end) / 2.0;
++    final double ageDelta = (candidate.age - targetMidAge).abs();
++    final int ageScore = max(4, (15 - ageDelta * 1.2).round());
++
++    int loveLanguageScore = 5;
++    if (user.loveLanguage.toLowerCase() == candidate.loveLanguage.toLowerCase() ||
++        user.loveLanguage.toLowerCase().contains(candidate.loveLanguage.toLowerCase())) {
++      loveLanguageScore = 10;
++    }
++
++    final int rawTotal = passionScore + marchingBonus + distanceScore + ageScore + loveLanguageScore;
++    final int totalScore = min(99, max(62, rawTotal));
++
++    return CompatibilityResult(
++      totalScore: totalScore,
++      passionScore: passionScore,
++      marchingBonus: marchingBonus,
++      distanceScore: distanceScore,
++      ageScore: ageScore,
++      loveLanguageScore: loveLanguageScore,
++      sharedPassions: sharedPassions,
++      isHardMatch: isHardMatch,
++    );
++  }
++
++  static List<LoverProfile> getSuggestedMatches({
++    required LoverProfile user,
++    required UserPreferences preferences,
++    required List<LoverProfile> candidates,
++  }) {
++    final list = <MapEntry<LoverProfile, int>>[];
++
++    for (final candidate in candidates) {
++      final res = calculateCompatibility(
++        user: user,
++        preferences: preferences,
++        candidate: candidate,
++      );
++      if (res.isHardMatch) {
++        list.add(MapEntry(candidate.copyWith(matchScore: res.totalScore), res.totalScore));
++      }
++    }
++
++    list.sort((a, b) => b.value.compareTo(a.value));
++    return list.map((e) => e.key).toList();
++  }
++}
+diff --git a/flutter_project/lib/services/notification_service.dart b/flutter_project/lib/services/notification_service.dart
+new file mode 100644
+index 0000000..1565f73
+--- /dev/null
++++ b/flutter_project/lib/services/notification_service.dart
+@@ -0,0 +1,129 @@
++import 'package:flutter/foundation.dart';
++import 'package:flutter_local_notifications/flutter_local_notifications.dart';
++import '../models/app_notification.dart';
++
++class NotificationPreferences {
++  final bool matchAlerts;
++  final bool messageAlerts;
++  final bool marchingAlerts;
++  final bool soundEnabled;
++  final bool vibrationEnabled;
++
++  const NotificationPreferences({
++    this.matchAlerts = true,
++    this.messageAlerts = true,
++    this.marchingAlerts = true,
++    this.soundEnabled = true,
++    this.vibrationEnabled = true,
++  });
++
++  NotificationPreferences copyWith({
++    bool? matchAlerts,
++    bool? messageAlerts,
++    bool? marchingAlerts,
++    bool? soundEnabled,
++    bool? vibrationEnabled,
++  }) {
++    return NotificationPreferences(
++      matchAlerts: matchAlerts ?? this.matchAlerts,
++      messageAlerts: messageAlerts ?? this.messageAlerts,
++      marchingAlerts: marchingAlerts ?? this.marchingAlerts,
++      soundEnabled: soundEnabled ?? this.soundEnabled,
++      vibrationEnabled: vibrationEnabled ?? this.vibrationEnabled,
++    );
++  }
++}
++
++class NotificationService extends ChangeNotifier {
++  final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
++
++  List<AppNotification> _notifications = [];
++  NotificationPreferences _preferences = const NotificationPreferences();
++  bool _isInitialized = false;
++
++  List<AppNotification> get notifications => List.unmodifiable(_notifications);
++  NotificationPreferences get preferences => _preferences;
++  int get unreadCount => _notifications.where((n) => !n.read).length;
++
++  Future<void> initialize() async {
++    if (_isInitialized) return;
++
++    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
++    const iosSettings = DarwinInitializationSettings(
++      requestAlertPermission: true,
++      requestBadgePermission: true,
++      requestSoundPermission: true,
++    );
++
++    const initSettings = InitializationSettings(android: androidSettings, iOS: iosSettings);
++    await _localNotifications.initialize(initSettings);
++    _isInitialized = true;
++    notifyListeners();
++  }
++
++  void addNotification(AppNotification notification) {
++    _notifications = [notification, ..._notifications];
++    notifyListeners();
++
++    // Trigger local push banner if preferences allow
++    if (_shouldTriggerPush(notification.type)) {
++      _showLocalPush(notification);
++    }
++  }
++
++  bool _shouldTriggerPush(NotificationType type) {
++    switch (type) {
++      case NotificationType.newMatch:
++      case NotificationType.superLike:
++      case NotificationType.chemistryAlert:
++        return _preferences.matchAlerts;
++      case NotificationType.message:
++      case NotificationType.dateInvite:
++        return _preferences.messageAlerts;
++      case NotificationType.marchingEvent:
++        return _preferences.marchingAlerts;
++    }
++  }
++
++  Future<void> _showLocalPush(AppNotification notification) async {
++    const androidDetails = AndroidNotificationDetails(
++      'amora_notifications',
++      'Amora Alerts',
++      channelDescription: 'Matches, messages and marching cadence alerts',
++      importance: Importance.high,
++      priority: Priority.high,
++    );
++    const iosDetails = DarwinNotificationDetails();
++    const details = NotificationDetails(android: androidDetails, iOS: iosDetails);
++
++    await _localNotifications.show(
++      notification.id.hashCode,
++      notification.title,
++      notification.body,
++      details,
++    );
++  }
++
++  void markAsRead(String id) {
++    _notifications = _notifications.map((n) {
++      if (n.id == id) return n.copyWith(read: true);
++      return n;
++    }).toList();
++    notifyListeners();
++  }
++
++  void markAllAsRead() {
++    _notifications = _notifications.map((n) => n.copyWith(read: true)).toList();
++    notifyListeners();
++  }
++
++  void deleteNotification(String id) {
++    _notifications = _notifications.where((n) => n.id != id).toList();
++    notifyListeners();
++  }
++
++  void updatePreferences(NotificationPreferences newPrefs) {
++    _preferences = newPrefs;
++    notifyListeners();
++  }
++}
+diff --git a/flutter_project/pubspec.yaml b/flutter_project/pubspec.yaml
+new file mode 100644
+index 0000000..44d95cb
+--- /dev/null
++++ b/flutter_project/pubspec.yaml
+@@ -0,0 +1,42 @@
++name: amora_dating_app
++description: "A modern cross-platform mobile application for dating and matching lovers."
++publish_to: "none"
++version: 1.0.0+1
++
++environment:
++  sdk: ">=3.3.0 <4.0.0"
++
++dependencies:
++  flutter:
++    sdk: flutter
++  # UI & Components
++  flutter_card_swiper: ^7.0.1
++  google_fonts: ^6.2.1
++  lucide_icons: ^0.257.0
++  cached_network_image: ^3.3.1
++  confetti: ^0.7.0
++  provider: ^6.1.2
++  intl: ^0.19.0
++  flutter_animate: ^4.5.0
++
++  # Authentication & Secure Credential Storage
++  firebase_core: ^3.1.0
++  firebase_auth: ^5.1.0
++  google_sign_in: ^6.2.1
++  flutter_facebook_auth: ^7.1.1
++  flutter_secure_storage: ^9.2.2
++
++  # Media, Notifications & Profile Management
++  image_picker: ^1.1.2
++  audioplayers: ^6.0.0
++  flutter_local_notifications: ^17.1.2
++
++dev_dependencies:
++  flutter_test:
++    sdk: flutter
++  flutter_lints: ^3.0.0
++
++flutter:
++  uses-material-design: true
++  assets:
++    - assets/images/
+diff --git a/flutter_project/test/notification_service_test.dart b/flutter_project/test/notification_service_test.dart
+new file mode 100644
+index 0000000..c910e88
+--- /dev/null
++++ b/flutter_project/test/notification_service_test.dart
+@@ -0,0 +1,89 @@
++import 'package:flutter_test/flutter_test.dart';
++import 'package:amora_dating_app/models/app_notification.dart';
++import 'package:amora_dating_app/services/notification_service.dart';
++
++void main() {
++  group('NotificationService Tests', () {
++    late NotificationService service;
++
++    setUp(() {
++      service = NotificationService();
++    });
++
++    test('Initial notification list is empty with 0 unread', () {
++      expect(service.notifications.isEmpty, true);
++      expect(service.unreadCount, 0);
++    });
++
++    test('Adding unread notification increments unreadCount', () {
++      final notif = AppNotification(
++        id: 'n1',
++        type: NotificationType.newMatch,
++        title: 'New Match!',
++        body: 'You and Sophia liked each other.',
++        timestamp: DateTime.now(),
++        read: false,
++      );
++
++      service.addNotification(notif);
++      expect(service.notifications.length, 1);
++      expect(service.unreadCount, 1);
++    });
++
++    test('Marking notification as read decrements unreadCount', () {
++      final notif = AppNotification(
++        id: 'n2',
++        type: NotificationType.message,
++        title: 'New Message',
++        body: 'Hey Liam, see you at the brass fanfare!',
++        timestamp: DateTime.now(),
++        read: false,
++      );
++
++      service.addNotification(notif);
++      expect(service.unreadCount, 1);
++
++      service.markAsRead('n2');
++      expect(service.unreadCount, 0);
++      expect(service.notifications.first.read, true);
++    });
++
++    test('Mark all as read sets all items read to true', () {
++      service.addNotification(AppNotification(
++        id: 'n3',
++        type: NotificationType.superLike,
++        title: 'Super Like',
++        body: 'Someone super liked you.',
++        timestamp: DateTime.now(),
++        read: false,
++      ));
++      service.addNotification(AppNotification(
++        id: 'n4',
++        type: NotificationType.marchingEvent,
++        title: 'Marching Parade',
++        body: 'Annual drumline rehearsal this Sunday.',
++        timestamp: DateTime.now(),
++        read: false,
++      ));
++
++      expect(service.unreadCount, 2);
++      service.markAllAsRead();
++      expect(service.unreadCount, 0);
++    });
++
++    test('Deleting notification removes it from list', () {
++      service.addNotification(AppNotification(
++        id: 'n5',
++        type: NotificationType.dateInvite,
++        title: 'Date Invite',
++        body: 'Coffee walk?',
++        timestamp: DateTime.now(),
++        read: false,
++      ));
++
++      expect(service.notifications.length, 1);
++      service.deleteNotification('n5');
++      expect(service.notifications.isEmpty, true);
++    });
++  });
++}
+diff --git a/src/App.tsx b/src/App.tsx
+index a6a151c..f584386 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -18,8 +18,9 @@ import { FlutterCodeViewer } from './components/FlutterCodeViewer';
+ import { AuthModal } from './components/AuthModal';
+ import { EditProfileModal, EditableUserProfile } from './components/EditProfileModal';
+ import { AlgorithmExplainerModal } from './components/AlgorithmExplainerModal';
++import { NotificationsModal } from './components/NotificationsModal';
+ import { INITIAL_PROFILES, INITIAL_MATCHES, CURRENT_USER } from './data/profiles';
+-import { LoverProfile, FilterSettings, ChatThread } from './types';
++import { LoverProfile, FilterSettings, ChatThread, AppNotification, NotificationSettings } from './types';
+ import { rankProfiles } from './services/matchingAlgorithm';
+ 
+ export default function App() {
+@@ -77,6 +78,64 @@ export default function App() {
+   const [isEditProfileOpen, setIsEditProfileOpen] = useState<boolean>(false);
+   const [isFilterOpen, setIsFilterOpen] = useState<boolean>(false);
+   const [explainingProfile, setExplainingProfile] = useState<LoverProfile | null>(null);
++  const [isNotificationsOpen, setIsNotificationsOpen] = useState<boolean>(false);
++
++  // Notification Preferences & In-App notification list
++  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>({
++    pushEnabled: true,
++    matchAlerts: true,
++    messageAlerts: true,
++    marchingAlerts: true,
++    soundEnabled: true,
++    vibrationEnabled: true,
++  });
++
++  const [notifications, setNotifications] = useState<AppNotification[]>([
++    {
++      id: 'notif_1',
++      type: 'new_match',
++      title: 'It\'s a Match with Sophia! 🎉',
++      body: 'You and Sophia liked each other. You both share a 96% rhythm & brass connection.',
++      timestamp: '12m ago',
++      read: false,
++      senderId: 'profile_sophia',
++      senderName: 'Sophia',
++      senderAvatar: '/src/assets/images/profile_sophia_female_1794407594119.jpg',
++      relatedProfileId: 'profile_sophia',
++    },
++    {
++      id: 'notif_2',
++      type: 'message',
++      title: 'New Message from Sophia',
++      body: '"I loved your note about the brass fanfare! When are we checking out that vinyl cafe?"',
++      timestamp: '10m ago',
++      read: false,
++      senderId: 'profile_sophia',
++      senderName: 'Sophia',
++      senderAvatar: '/src/assets/images/profile_sophia_female_1794407594119.jpg',
++      actionRoute: 'chat',
++    },
++    {
++      id: 'notif_3',
++      type: 'marching_event',
++      title: 'Marching Brass Gathering 🎺',
++      body: 'Alumni Marching Ensemble open rehearsal & street cadence jam this Saturday at 4 PM.',
++      timestamp: '2h ago',
++      read: true,
++    },
++    {
++      id: 'notif_4',
++      type: 'super_like',
++      title: 'Super Like from Elena ⭐',
++      body: 'Elena super-liked your profile and loved your note about tenor drum cadences.',
++      timestamp: 'Yesterday',
++      read: true,
++      senderId: 'profile_elena',
++      senderName: 'Elena',
++      senderAvatar: '/src/assets/images/profile_elena_female_1794407596172.jpg',
++      relatedProfileId: 'profile_elena',
++    },
++  ]);
+ 
+   // Profiles stack
+   const [profiles, setProfiles] = useState<LoverProfile[]>(INITIAL_PROFILES);
+@@ -129,6 +188,22 @@ export default function App() {
+     if (direction === 'right' || direction === 'super') {
+       setMatchedCelebration(profile);
+ 
++      if (notificationSettings.matchAlerts) {
++        const matchNotif: AppNotification = {
++          id: `notif_match_${Date.now()}`,
++          type: 'new_match',
++          title: `It's a Match with ${profile.name}! 🎉`,
++          body: `You and ${profile.name} liked each other! Start a conversation.`,
++          timestamp: 'Just now',
++          read: false,
++          senderId: profile.id,
++          senderName: profile.name,
++          senderAvatar: profile.photos[0],
++          relatedProfileId: profile.id,
++        };
++        setNotifications((prev) => [matchNotif, ...prev]);
++      }
++
+       const existingThread = threads.find((t) => t.profile.id === profile.id);
+       if (!existingThread) {
+         const newThread: ChatThread = {
+@@ -208,6 +283,23 @@ export default function App() {
+               timestamp: 'Just now',
+               isMe: false,
+             };
++
++            if (notificationSettings.messageAlerts) {
++              const msgNotif: AppNotification = {
++                id: `notif_msg_${Date.now()}`,
++                type: 'message',
++                title: `Message from ${thread.profile.name}`,
++                body: randomReply,
++                timestamp: 'Just now',
++                read: false,
++                senderId: thread.profile.id,
++                senderName: thread.profile.name,
++                senderAvatar: thread.profile.photos[0],
++                actionRoute: 'chat',
++              };
++              setNotifications((prevNotifs) => [msgNotif, ...prevNotifs]);
++            }
++
+             return {
+               ...thread,
+               lastMessage: randomReply,
+@@ -314,7 +406,38 @@ export default function App() {
+     setLoggedInUser(null);
+   };
+ 
++  const handleMarkNotifAsRead = (id: string) => {
++    setNotifications((prev) =>
++      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
++    );
++  };
++
++  const handleMarkAllNotifsAsRead = () => {
++    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
++  };
++
++  const handleDeleteNotif = (id: string) => {
++    setNotifications((prev) => prev.filter((n) => n.id !== id));
++  };
++
++  const handleSelectNotification = (notif: AppNotification) => {
++    setIsNotificationsOpen(false);
++    if (notif.actionRoute === 'chat' || notif.type === 'message') {
++      const thread = threads.find((t) => t.profile.id === notif.senderId);
++      if (thread) {
++        setActiveThreadId(thread.id);
++        setActiveTab('matches');
++      }
++    } else if (notif.relatedProfileId) {
++      const p = profiles.find((prof) => prof.id === notif.relatedProfileId);
++      if (p) {
++        setActiveProfileModal(p);
++      }
++    }
++  };
++
+   const totalUnreadCount = threads.reduce((acc, t) => acc + t.unreadCount, 0);
++  const unreadNotifsCount = notifications.filter((n) => !n.read).length;
+ 
+   return (
+     <div className="min-h-screen bg-stone-100 dark:bg-stone-950 text-stone-900 dark:text-stone-100 flex flex-col font-sans transition-colors duration-200">
+@@ -333,6 +456,8 @@ export default function App() {
+         setDeviceMode={setDeviceMode}
+         onOpenFilter={() => setIsFilterOpen(true)}
+         matchesCount={totalUnreadCount}
++        notificationsCount={unreadNotifsCount}
++        onOpenNotifications={() => setIsNotificationsOpen(true)}
+       />
+ 
+       {/* Main Content Area */}
+@@ -544,6 +669,19 @@ export default function App() {
+         onClose={() => setMatchedCelebration(null)}
+         onOpenChat={handleStartChatFromMatch}
+       />
++
++      {/* Notifications Modal Hub */}
++      <NotificationsModal
++        isOpen={isNotificationsOpen}
++        onClose={() => setIsNotificationsOpen(false)}
++        notifications={notifications}
++        onMarkAsRead={handleMarkNotifAsRead}
++        onMarkAllAsRead={handleMarkAllNotifsAsRead}
++        onDeleteNotification={handleDeleteNotif}
++        onSelectNotification={handleSelectNotification}
++        settings={notificationSettings}
++        onUpdateSettings={setNotificationSettings}
++      />
+     </div>
+   );
+ }
+diff --git a/src/components/NotificationsModal.tsx b/src/components/NotificationsModal.tsx
+new file mode 100644
+index 0000000..9ed022a
+--- /dev/null
++++ b/src/components/NotificationsModal.tsx
+@@ -0,0 +1,320 @@
++import React, { useState } from 'react';
++import {
++  X,
++  Bell,
++  Heart,
++  MessageCircle,
++  Star,
++  Calendar,
++  Music,
++  Sparkles,
++  Check,
++  CheckCheck,
++  Trash2,
++  Settings,
++  ChevronRight,
++} from 'lucide-react';
++import { AppNotification, NotificationSettings } from '../types';
++
++interface NotificationsModalProps {
++  isOpen: boolean;
++  onClose: () => void;
++  notifications: AppNotification[];
++  onMarkAsRead: (id: string) => void;
++  onMarkAllAsRead: () => void;
++  onDeleteNotification: (id: string) => void;
++  onSelectNotification: (notification: AppNotification) => void;
++  settings: NotificationSettings;
++  onUpdateSettings: (settings: NotificationSettings) => void;
++}
++
++export const NotificationsModal: React.FC<NotificationsModalProps> = ({
++  isOpen,
++  onClose,
++  notifications,
++  onMarkAsRead,
++  onMarkAllAsRead,
++  onDeleteNotification,
++  onSelectNotification,
++  settings,
++  onUpdateSettings,
++}) => {
++  const [activeTab, setActiveTab] = useState<'all' | 'matches' | 'messages' | 'events'>('all');
++  const [showSettings, setShowSettings] = useState(false);
++
++  if (!isOpen) return null;
++
++  const unreadCount = notifications.filter((n) => !n.read).length;
++
++  const filteredNotifications = notifications.filter((n) => {
++    if (activeTab === 'all') return true;
++    if (activeTab === 'matches') return n.type === 'new_match' || n.type === 'super_like' || n.type === 'chemistry_alert';
++    if (activeTab === 'messages') return n.type === 'message' || n.type === 'date_invite';
++    if (activeTab === 'events') return n.type === 'marching_event';
++    return true;
++  });
++
++  const getIcon = (type: AppNotification['type']) => {
++    switch (type) {
++      case 'new_match':
++        return <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />;
++      case 'super_like':
++        return <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />;
++      case 'message':
++        return <MessageCircle className="w-3.5 h-3.5 text-sky-500" />;
++      case 'date_invite':
++        return <Calendar className="w-3.5 h-3.5 text-purple-500" />;
++      case 'marching_event':
++        return <Music className="w-3.5 h-3.5 text-amber-500" />;
++      case 'chemistry_alert':
++        return <Sparkles className="w-3.5 h-3.5 text-rose-500" />;
++      default:
++        return <Bell className="w-3.5 h-3.5 text-stone-400" />;
++    }
++  };
++
++  return (
++    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-150">
++      <div className="w-full max-w-md bg-white dark:bg-stone-900 rounded-t-3xl sm:rounded-3xl shadow-2xl border border-stone-200 dark:border-stone-800 overflow-hidden flex flex-col max-h-[85vh]">
++        {/* Header */}
++        <div className="p-4 border-b border-stone-100 dark:border-stone-800 flex items-center justify-between shrink-0">
++          <div className="flex items-center gap-2">
++            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-rose-600 to-amber-500 flex items-center justify-center text-white shadow-xs">
++              <Bell className="w-4 h-4 fill-white" />
++            </div>
++            <div>
++              <div className="flex items-center gap-2">
++                <h2 className="font-serif-romance text-lg font-bold text-stone-900 dark:text-white">
++                  Notifications
++                </h2>
++                {unreadCount > 0 && (
++                  <span className="px-2 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-bold">
++                    {unreadCount} new
++                  </span>
++                )}
++              </div>
++              <p className="text-xs text-stone-500">Matches, messages & marching alerts</p>
++            </div>
++          </div>
++
++          <div className="flex items-center gap-1">
++            <button
++              onClick={() => setShowSettings(!showSettings)}
++              className={`p-2 rounded-lg transition-colors ${
++                showSettings
++                  ? 'bg-stone-200 dark:bg-stone-800 text-stone-900 dark:text-white'
++                  : 'text-stone-400 hover:text-stone-600 dark:hover:text-stone-200'
++              }`}
++              title="Notification Settings"
++            >
++              <Settings className="w-4 h-4" />
++            </button>
++            <button
++              onClick={onClose}
++              className="p-2 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 rounded-lg transition-colors"
++            >
++              <X className="w-5 h-5" />
++            </button>
++          </div>
++        </div>
++
++        {/* Settings Drawer Panel */}
++        {showSettings && (
++          <div className="p-4 bg-stone-50 dark:bg-stone-850 border-b border-stone-200 dark:border-stone-800 text-xs space-y-3 animate-in slide-in-from-top-2">
++            <div className="flex items-center justify-between font-bold text-stone-700 dark:text-stone-300">
++              <span>Notification Preferences (Flutter Push & Local)</span>
++              <button
++                onClick={() => setShowSettings(false)}
++                className="text-[11px] text-rose-600 font-semibold"
++              >
++                Done
++              </button>
++            </div>
++
++            <div className="space-y-2">
++              <label className="flex items-center justify-between cursor-pointer">
++                <span className="text-stone-700 dark:text-stone-300">New Match Alerts</span>
++                <input
++                  type="checkbox"
++                  checked={settings.matchAlerts}
++                  onChange={(e) =>
++                    onUpdateSettings({ ...settings, matchAlerts: e.target.checked })
++                  }
++                  className="accent-rose-600 rounded"
++                />
++              </label>
++
++              <label className="flex items-center justify-between cursor-pointer">
++                <span className="text-stone-700 dark:text-stone-300">Direct Message Alerts</span>
++                <input
++                  type="checkbox"
++                  checked={settings.messageAlerts}
++                  onChange={(e) =>
++                    onUpdateSettings({ ...settings, messageAlerts: e.target.checked })
++                  }
++                  className="accent-rose-600 rounded"
++                />
++              </label>
++
++              <label className="flex items-center justify-between cursor-pointer">
++                <span className="text-stone-700 dark:text-stone-300">Marching & Rhythm Events</span>
++                <input
++                  type="checkbox"
++                  checked={settings.marchingAlerts}
++                  onChange={(e) =>
++                    onUpdateSettings({ ...settings, marchingAlerts: e.target.checked })
++                  }
++                  className="accent-rose-600 rounded"
++                />
++              </label>
++
++              <label className="flex items-center justify-between cursor-pointer">
++                <span className="text-stone-700 dark:text-stone-300">Chime Sound Effects</span>
++                <input
++                  type="checkbox"
++                  checked={settings.soundEnabled}
++                  onChange={(e) =>
++                    onUpdateSettings({ ...settings, soundEnabled: e.target.checked })
++                  }
++                  className="accent-rose-600 rounded"
++                />
++              </label>
++            </div>
++          </div>
++        )}
++
++        {/* Filter Tabs & Mark All as Read */}
++        <div className="p-3 pb-2 border-b border-stone-100 dark:border-stone-800 flex items-center justify-between gap-2 shrink-0">
++          <div className="flex gap-1 overflow-x-auto no-scrollbar text-xs">
++            {[
++              { id: 'all', label: 'All' },
++              { id: 'matches', label: 'Matches' },
++              { id: 'messages', label: 'Messages' },
++              { id: 'events', label: 'Events' },
++            ].map((tab) => (
++              <button
++                key={tab.id}
++                onClick={() => setActiveTab(tab.id as any)}
++                className={`px-2.5 py-1 rounded-lg font-medium transition-colors whitespace-nowrap ${
++                  activeTab === tab.id
++                    ? 'bg-rose-600 text-white'
++                    : 'text-stone-500 hover:text-stone-900 dark:hover:text-stone-200'
++                }`}
++              >
++                {tab.label}
++              </button>
++            ))}
++          </div>
++
++          {unreadCount > 0 && (
++            <button
++              onClick={onMarkAllAsRead}
++              className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1 shrink-0"
++            >
++              <CheckCheck className="w-3.5 h-3.5" />
++              <span>Mark all read</span>
++            </button>
++          )}
++        </div>
++
++        {/* Notifications List Body */}
++        <div className="flex-1 overflow-y-auto p-3 space-y-2">
++          {filteredNotifications.length === 0 ? (
++            <div className="py-12 flex flex-col items-center justify-center text-center">
++              <div className="w-12 h-12 rounded-full bg-stone-100 dark:bg-stone-800 flex items-center justify-center text-stone-400 mb-2">
++                <Bell className="w-6 h-6 stroke-1" />
++              </div>
++              <p className="text-xs font-semibold text-stone-700 dark:text-stone-300">
++                No notifications in this category
++              </p>
++              <p className="text-[11px] text-stone-400 max-w-xs mt-0.5">
++                When lovers like your profile or send you a message, alerts will appear here.
++              </p>
++            </div>
++          ) : (
++            filteredNotifications.map((notif) => (
++              <div
++                key={notif.id}
++                onClick={() => {
++                  if (!notif.read) onMarkAsRead(notif.id);
++                  onSelectNotification(notif);
++                }}
++                className={`p-3 rounded-2xl border transition-all flex items-start gap-3 cursor-pointer group ${
++                  notif.read
++                    ? 'bg-white dark:bg-stone-850 border-stone-100 dark:border-stone-800/80 opacity-80'
++                    : 'bg-rose-50/50 dark:bg-stone-800 border-rose-200/80 dark:border-rose-900/60 shadow-xs'
++                }`}
++              >
++                {/* Avatar with Type Badge */}
++                <div className="relative shrink-0">
++                  <div className="w-10 h-10 rounded-full overflow-hidden bg-stone-200 dark:bg-stone-700 border border-stone-200 dark:border-stone-700">
++                    {notif.senderAvatar ? (
++                      <img
++                        src={notif.senderAvatar}
++                        alt={notif.senderName || 'Avatar'}
++                        referrerPolicy="no-referrer"
++                        className="w-full h-full object-cover"
++                      />
++                    ) : (
++                      <div className="w-full h-full flex items-center justify-center text-stone-500">
++                        <Bell className="w-4 h-4" />
++                      </div>
++                    )}
++                  </div>
++                  <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 flex items-center justify-center shadow-xs">
++                    {getIcon(notif.type)}
++                  </div>
++                </div>
++
++                {/* Content */}
++                <div className="flex-1 min-w-0">
++                  <div className="flex items-center justify-between gap-1 mb-0.5">
++                    <span className="text-xs font-bold text-stone-900 dark:text-white truncate">
++                      {notif.title}
++                    </span>
++                    <span className="text-[10px] text-stone-400 shrink-0">
++                      {notif.timestamp}
++                    </span>
++                  </div>
++                  <p className="text-xs text-stone-600 dark:text-stone-300 line-clamp-2 leading-relaxed">
++                    {notif.body}
++                  </p>
++                </div>
++
++                {/* Unread dot or Delete Action */}
++                <div className="flex items-center gap-1 shrink-0 self-center">
++                  {!notif.read && (
++                    <div className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
++                  )}
++                  <button
++                    type="button"
++                    onClick={(e) => {
++                      e.stopPropagation();
++                      onDeleteNotification(notif.id);
++                    }}
++                    className="p-1.5 text-stone-400 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity"
++                    title="Delete notification"
++                  >
++                    <Trash2 className="w-3.5 h-3.5" />
++                  </button>
++                  <ChevronRight className="w-4 h-4 text-stone-300 group-hover:text-stone-500 transition-colors" />
++                </div>
++              </div>
++            ))
++          )}
++        </div>
++
++        {/* Footer */}
++        <div className="p-3 bg-stone-50 dark:bg-stone-850 border-t border-stone-100 dark:border-stone-800 text-[11px] text-stone-500 flex items-center justify-between">
++          <span>Synced with Flutter Local Notifications</span>
++          <button
++            onClick={onClose}
++            className="font-semibold text-rose-600 hover:underline"
++          >
++            Close
++          </button>
++        </div>
++      </div>
++    </div>
++  );
++};
+diff --git a/src/components/TopBar.tsx b/src/components/TopBar.tsx
+index 45e12c4..579f0b6 100644
+--- a/src/components/TopBar.tsx
++++ b/src/components/TopBar.tsx
+@@ -1,5 +1,5 @@
+ import React from 'react';
+-import { Heart, Code2, Smartphone, Moon, Sun, SlidersHorizontal } from 'lucide-react';
++import { Heart, Code2, Smartphone, Moon, Sun, SlidersHorizontal, Bell } from 'lucide-react';
+ 
+ interface TopBarProps {
+   activeTab: 'swipe' | 'explore' | 'matches' | 'profile';
+@@ -12,6 +12,8 @@ interface TopBarProps {
+   setDeviceMode: (mode: 'mobile' | 'pixel' | 'fullscreen') => void;
+   onOpenFilter: () => void;
+   matchesCount: number;
++  notificationsCount: number;
++  onOpenNotifications: () => void;
+ }
+ 
+ export const TopBar: React.FC<TopBarProps> = ({
+@@ -25,6 +27,8 @@ export const TopBar: React.FC<TopBarProps> = ({
+   setDeviceMode,
+   onOpenFilter,
+   matchesCount,
++  notificationsCount,
++  onOpenNotifications,
+ }) => {
+   return (
+     <header className="sticky top-0 z-40 w-full border-b border-stone-200 dark:border-stone-800 bg-white/95 dark:bg-stone-950/95 backdrop-blur-md">
+@@ -148,6 +152,19 @@ export const TopBar: React.FC<TopBarProps> = ({
+             </button>
+           </div>
+ 
++          {/* Notifications Trigger */}
++          <button
++            onClick={onOpenNotifications}
++            className="relative p-2 text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-white rounded-lg hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
++            title="Notifications"
++            aria-label="View notifications"
++          >
++            <Bell className="w-4 h-4" />
++            {notificationsCount > 0 && (
++              <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white dark:ring-stone-950" />
++            )}
++          </button>
++
+           {/* Quick Filter trigger */}
+           <button
+             onClick={onOpenFilter}
+diff --git a/src/data/flutterCode.ts b/src/data/flutterCode.ts
+index 71e074a..bc938ae 100644
+--- a/src/data/flutterCode.ts
++++ b/src/data/flutterCode.ts
+@@ -73,9 +73,10 @@ dependencies:
+   flutter_facebook_auth: ^7.1.1
+   flutter_secure_storage: ^9.2.2
+ 
+-  # Media & Profile Management
++  # Media, Notifications & Profile Management
+   image_picker: ^1.1.2
+   audioplayers: ^6.0.0
++  flutter_local_notifications: ^17.1.2
+ 
+ dev_dependencies:
+   flutter_test:
+@@ -1126,6 +1127,487 @@ class LoverProfile {
+     );
+   }
+ }
++`,
++  },
++  {
++    path: 'lib/models/app_notification.dart',
++    filename: 'app_notification.dart',
++    language: 'dart',
++    description: 'Data model for in-app and push notifications (matches, messages, events)',
++    content: `enum NotificationType {
++  newMatch,
++  message,
++  superLike,
++  dateInvite,
++  marchingEvent,
++  chemistryAlert,
++}
++
++class AppNotification {
++  final String id;
++  final NotificationType type;
++  final String title;
++  final String body;
++  final DateTime timestamp;
++  final bool read;
++  final String? senderId;
++  final String? senderName;
++  final String? senderAvatar;
++  final String? actionRoute;
++  final Map<String, dynamic>? metadata;
++
++  const AppNotification({
++    required this.id,
++    required this.type,
++    required this.title,
++    required this.body,
++    required this.timestamp,
++    this.read = false,
++    this.senderId,
++    this.senderName,
++    this.senderAvatar,
++    this.actionRoute,
++    this.metadata,
++  });
++
++  AppNotification copyWith({
++    String? id,
++    NotificationType? type,
++    String? title,
++    String? body,
++    DateTime? timestamp,
++    bool? read,
++    String? senderId,
++    String? senderName,
++    String? senderAvatar,
++    String? actionRoute,
++    Map<String, dynamic>? metadata,
++  }) {
++    return AppNotification(
++      id: id ?? this.id,
++      type: type ?? this.type,
++      title: title ?? this.title,
++      body: body ?? this.body,
++      timestamp: timestamp ?? this.timestamp,
++      read: read ?? this.read,
++      senderId: senderId ?? this.senderId,
++      senderName: senderName ?? this.senderName,
++      senderAvatar: senderAvatar ?? this.senderAvatar,
++      actionRoute: actionRoute ?? this.actionRoute,
++      metadata: metadata ?? this.metadata,
++    );
++  }
++}
++`,
++  },
++  {
++    path: 'lib/services/notification_service.dart',
++    filename: 'notification_service.dart',
++    language: 'dart',
++    description: 'Notification Provider with FlutterLocalNotificationsPlugin integration & state',
++    content: `import 'package:flutter/foundation.dart';
++import 'package:flutter_local_notifications/flutter_local_notifications.dart';
++import '../models/app_notification.dart';
++
++class NotificationPreferences {
++  final bool matchAlerts;
++  final bool messageAlerts;
++  final bool marchingAlerts;
++  final bool soundEnabled;
++  final bool vibrationEnabled;
++
++  const NotificationPreferences({
++    this.matchAlerts = true,
++    this.messageAlerts = true,
++    this.marchingAlerts = true,
++    this.soundEnabled = true,
++    this.vibrationEnabled = true,
++  });
++
++  NotificationPreferences copyWith({
++    bool? matchAlerts,
++    bool? messageAlerts,
++    bool? marchingAlerts,
++    bool? soundEnabled,
++    bool? vibrationEnabled,
++  }) {
++    return NotificationPreferences(
++      matchAlerts: matchAlerts ?? this.matchAlerts,
++      messageAlerts: messageAlerts ?? this.messageAlerts,
++      marchingAlerts: marchingAlerts ?? this.marchingAlerts,
++      soundEnabled: soundEnabled ?? this.soundEnabled,
++      vibrationEnabled: vibrationEnabled ?? this.vibrationEnabled,
++    );
++  }
++}
++
++class NotificationService extends ChangeNotifier {
++  final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
++
++  List<AppNotification> _notifications = [];
++  NotificationPreferences _preferences = const NotificationPreferences();
++  bool _isInitialized = false;
++
++  List<AppNotification> get notifications => List.unmodifiable(_notifications);
++  NotificationPreferences get preferences => _preferences;
++  int get unreadCount => _notifications.where((n) => !n.read).length;
++
++  Future<void> initialize() async {
++    if (_isInitialized) return;
++
++    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
++    const iosSettings = DarwinInitializationSettings(
++      requestAlertPermission: true,
++      requestBadgePermission: true,
++      requestSoundPermission: true,
++    );
++
++    const initSettings = InitializationSettings(android: androidSettings, iOS: iosSettings);
++    await _localNotifications.initialize(initSettings);
++    _isInitialized = true;
++    notifyListeners();
++  }
++
++  void addNotification(AppNotification notification) {
++    _notifications = [notification, ..._notifications];
++    notifyListeners();
++
++    // Trigger local push banner if preferences allow
++    if (_shouldTriggerPush(notification.type)) {
++      _showLocalPush(notification);
++    }
++  }
++
++  bool _shouldTriggerPush(NotificationType type) {
++    switch (type) {
++      case NotificationType.newMatch:
++      case NotificationType.superLike:
++      case NotificationType.chemistryAlert:
++        return _preferences.matchAlerts;
++      case NotificationType.message:
++      case NotificationType.dateInvite:
++        return _preferences.messageAlerts;
++      case NotificationType.marchingEvent:
++        return _preferences.marchingAlerts;
++    }
++  }
++
++  Future<void> _showLocalPush(AppNotification notification) async {
++    const androidDetails = AndroidNotificationDetails(
++      'amora_notifications',
++      'Amora Alerts',
++      channelDescription: 'Matches, messages and marching cadence alerts',
++      importance: Importance.high,
++      priority: Priority.high,
++    );
++    const iosDetails = DarwinNotificationDetails();
++    const details = NotificationDetails(android: androidDetails, iOS: iosDetails);
++
++    await _localNotifications.show(
++      notification.id.hashCode,
++      notification.title,
++      notification.body,
++      details,
++    );
++  }
++
++  void markAsRead(String id) {
++    _notifications = _notifications.map((n) {
++      if (n.id == id) return n.copyWith(read: true);
++      return n;
++    }).toList();
++    notifyListeners();
++  }
++
++  void markAllAsRead() {
++    _notifications = _notifications.map((n) => n.copyWith(read: true)).toList();
++    notifyListeners();
++  }
++
++  void deleteNotification(String id) {
++    _notifications = _notifications.where((n) => n.id != id).toList();
++    notifyListeners();
++  }
++
++  void updatePreferences(NotificationPreferences newPrefs) {
++    _preferences = newPrefs;
++    notifyListeners();
++  }
++}
++`,
++  },
++  {
++    path: 'lib/screens/notifications_screen.dart',
++    filename: 'notifications_screen.dart',
++    language: 'dart',
++    description: 'Flutter Notification Hub: Categories, unread counters, swipe-to-dismiss & preferences',
++    content: `import 'package:flutter/material.dart';
++import 'package:provider/provider.dart';
++import '../services/notification_service.dart';
++import '../models/app_notification.dart';
++
++class NotificationsScreen extends StatefulWidget {
++  const NotificationsScreen({super.key});
++
++  @override
++  State<NotificationsScreen> createState() => _NotificationsScreenState();
++}
++
++class _NotificationsScreenState extends State<NotificationsScreen> with SingleTickerProviderStateMixin {
++  late TabController _tabController;
++
++  @override
++  void initState() {
++    super.initState();
++    _tabController = TabController(length: 4, vsync: this);
++  }
++
++  @override
++  void dispose() {
++    _tabController.dispose();
++    super.dispose();
++  }
++
++  IconData _getTypeIcon(NotificationType type) {
++    switch (type) {
++      case NotificationType.newMatch:
++        return Icons.favorite;
++      case NotificationType.superLike:
++        return Icons.star;
++      case NotificationType.message:
++        return Icons.chat_bubble;
++      case NotificationType.dateInvite:
++        return Icons.calendar_today;
++      case NotificationType.marchingEvent:
++        return Icons.music_note;
++      case NotificationType.chemistryAlert:
++        return Icons.auto_awesome;
++    }
++  }
++
++  Color _getTypeColor(NotificationType type) {
++    switch (type) {
++      case NotificationType.newMatch:
++      case NotificationType.chemistryAlert:
++        return const Color(0xFFE11D48);
++      case NotificationType.superLike:
++        return Colors.amber.shade700;
++      case NotificationType.message:
++        return Colors.blue;
++      case NotificationType.dateInvite:
++        return Colors.purple;
++      case NotificationType.marchingEvent:
++        return Colors.orange;
++    }
++  }
++
++  @override
++  Widget build(BuildContext context) {
++    final notifService = context.watch<NotificationService>();
++    final notifications = notifService.notifications;
++
++    return Scaffold(
++      appBar: AppBar(
++        title: const Text('Notifications'),
++        bottom: TabBar(
++          controller: _tabController,
++          indicatorColor: const Color(0xFFE11D48),
++          labelColor: const Color(0xFFE11D48),
++          isScrollable: true,
++          tabs: const [
++            Tab(text: 'All'),
++            Tab(text: 'Matches'),
++            Tab(text: 'Messages'),
++            Tab(text: 'Events'),
++          ],
++        ),
++        actions: [
++          if (notifService.unreadCount > 0)
++            TextButton.icon(
++              onPressed: () => notifService.markAllAsRead(),
++              icon: const Icon(Icons.done_all, size: 18),
++              label: const Text('Mark read'),
++            ),
++        ],
++      ),
++      body: TabBarView(
++        controller: _tabController,
++        children: [
++          _buildList(notifications, notifService),
++          _buildList(
++            notifications.where((n) => n.type == NotificationType.newMatch || n.type == NotificationType.superLike).toList(),
++            notifService,
++          ),
++          _buildList(
++            notifications.where((n) => n.type == NotificationType.message || n.type == NotificationType.dateInvite).toList(),
++            notifService,
++          ),
++          _buildList(
++            notifications.where((n) => n.type == NotificationType.marchingEvent).toList(),
++            notifService,
++          ),
++        ],
++      ),
++    );
++  }
++
++  Widget _buildList(List<AppNotification> items, NotificationService service) {
++    if (items.isEmpty) {
++      return const Center(
++        child: Column(
++          mainAxisSize: MainAxisSize.min,
++          children: [
++            Icon(Icons.notifications_none, size: 54, color: Colors.grey),
++            SizedBox(height: 12),
++            Text('No notifications here', style: TextStyle(color: Colors.grey)),
++          ],
++        ),
++      );
++    }
++
++    return ListView.separated(
++      padding: const EdgeInsets.symmetric(vertical: 8),
++      itemCount: items.length,
++      separatorBuilder: (_, __) => const Divider(height: 1),
++      itemBuilder: (context, index) {
++        final item = items[index];
++        return Dismissible(
++          key: Key(item.id),
++          direction: DismissDirection.endToStart,
++          background: Container(
++            color: Colors.red,
++            alignment: Alignment.centerRight,
++            padding: const EdgeInsets.only(right: 20),
++            child: const Icon(Icons.delete, color: Colors.white),
++          ),
++          onDismissed: (_) => service.deleteNotification(item.id),
++          child: ListTile(
++            tileColor: item.read ? null : const Color(0xFFE11D48).withOpacity(0.04),
++            leading: CircleAvatar(
++              backgroundColor: _getTypeColor(item.type).withOpacity(0.15),
++              child: Icon(_getTypeIcon(item.type), color: _getTypeColor(item.type), size: 20),
++            ),
++            title: Text(
++              item.title,
++              style: TextStyle(fontWeight: item.read ? FontWeight.normal : FontWeight.bold),
++            ),
++            subtitle: Text(item.body, maxLines: 2, overflow: TextOverflow.ellipsis),
++            trailing: item.read
++                ? null
++                : Container(
++                    width: 8,
++                    height: 8,
++                    decoration: const BoxDecoration(
++                      color: Color(0xFFE11D48),
++                      shape: BoxShape.circle,
++                    ),
++                  ),
++            onTap: () {
++              if (!item.read) service.markAsRead(item.id);
++            },
++          ),
++        );
++      },
++    );
++  }
++}
++`,
++  },
++  {
++    path: 'test/notification_service_test.dart',
++    filename: 'notification_service_test.dart',
++    language: 'dart',
++    description: 'Unit tests for NotificationService (unread calculation, mark read, dismissal)',
++    content: `import 'package:flutter_test/flutter_test.dart';
++import 'package:amora_dating_app/models/app_notification.dart';
++import 'package:amora_dating_app/services/notification_service.dart';
++
++void main() {
++  group('NotificationService Tests', () {
++    late NotificationService service;
++
++    setUp(() {
++      service = NotificationService();
++    });
++
++    test('Initial notification list is empty with 0 unread', () {
++      expect(service.notifications.isEmpty, true);
++      expect(service.unreadCount, 0);
++    });
++
++    test('Adding unread notification increments unreadCount', () {
++      final notif = AppNotification(
++        id: 'n1',
++        type: NotificationType.newMatch,
++        title: 'New Match!',
++        body: 'You and Sophia liked each other.',
++        timestamp: DateTime.now(),
++        read: false,
++      );
++
++      service.addNotification(notif);
++      expect(service.notifications.length, 1);
++      expect(service.unreadCount, 1);
++    });
++
++    test('Marking notification as read decrements unreadCount', () {
++      final notif = AppNotification(
++        id: 'n2',
++        type: NotificationType.message,
++        title: 'New Message',
++        body: 'Hey Liam, see you at the brass fanfare!',
++        timestamp: DateTime.now(),
++        read: false,
++      );
++
++      service.addNotification(notif);
++      expect(service.unreadCount, 1);
++
++      service.markAsRead('n2');
++      expect(service.unreadCount, 0);
++      expect(service.notifications.first.read, true);
++    });
++
++    test('Mark all as read sets all items read to true', () {
++      service.addNotification(AppNotification(
++        id: 'n3',
++        type: NotificationType.superLike,
++        title: 'Super Like',
++        body: 'Someone super liked you.',
++        timestamp: DateTime.now(),
++        read: false,
++      ));
++      service.addNotification(AppNotification(
++        id: 'n4',
++        type: NotificationType.marchingEvent,
++        title: 'Marching Parade',
++        body: 'Annual drumline rehearsal this Sunday.',
++        timestamp: DateTime.now(),
++        read: false,
++      ));
++
++      expect(service.unreadCount, 2);
++      service.markAllAsRead();
++      expect(service.unreadCount, 0);
++    });
++
++    test('Deleting notification removes it from list', () {
++      service.addNotification(AppNotification(
++        id: 'n5',
++        type: NotificationType.dateInvite,
++        title: 'Date Invite',
++        body: 'Coffee walk?',
++        timestamp: DateTime.now(),
++        read: false,
++      ));
++
++      expect(service.notifications.length, 1);
++      service.deleteNotification('n5');
++      expect(service.notifications.isEmpty, true);
++    });
++  });
++}
+ `,
+   },
+ ];
++
+diff --git a/src/types/index.ts b/src/types/index.ts
+index a0012d3..44304c1 100644
+--- a/src/types/index.ts
++++ b/src/types/index.ts
+@@ -60,3 +60,34 @@ export interface ChatThread {
+   messages: ChatMessage[];
+   isMatchNew?: boolean;
+ }
++
++export type NotificationType =
++  | 'new_match'
++  | 'message'
++  | 'super_like'
++  | 'date_invite'
++  | 'marching_event'
++  | 'chemistry_alert';
++
++export interface AppNotification {
++  id: string;
++  type: NotificationType;
++  title: string;
++  body: string;
++  timestamp: string;
++  read: boolean;
++  senderId?: string;
++  senderName?: string;
++  senderAvatar?: string;
++  actionRoute?: string;
++  relatedProfileId?: string;
++}
++
++export interface NotificationSettings {
++  pushEnabled: boolean;
++  matchAlerts: boolean;
++  messageAlerts: boolean;
++  marchingAlerts: boolean;
++  soundEnabled: boolean;
++  vibrationEnabled: boolean;
++}
+-- 
+2.34.1
+

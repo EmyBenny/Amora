@@ -4,8 +4,9 @@ import {
   Compass,
   MessageCircle,
   User,
+  Bell,
+  SlidersHorizontal,
 } from 'lucide-react';
-import { TopBar } from './components/TopBar';
 import { DeviceFrame } from './components/DeviceFrame';
 import { SwipeCardDeck } from './components/SwipeCardDeck';
 import { ProfileDetailModal } from './components/ProfileDetailModal';
@@ -30,7 +31,7 @@ export default function App() {
   // Layout & Navigation state
   const [activeTab, setActiveTab] = useState<'swipe' | 'explore' | 'matches' | 'profile'>('swipe');
   const [showFlutterCode, setShowFlutterCode] = useState<boolean>(false);
-  const [deviceMode, setDeviceMode] = useState<'mobile' | 'pixel' | 'fullscreen'>('mobile');
+  const [deviceMode, setDeviceMode] = useState<'mobile' | 'pixel'>('mobile');
 
   // Test Persona: 'male' (Liam) or 'female' (Maya)
   const [currentPersona, setCurrentPersona] = useState<'male' | 'female'>('male');
@@ -441,35 +442,65 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-stone-100 dark:bg-stone-950 text-stone-900 dark:text-stone-100 flex flex-col font-sans transition-colors duration-200">
-      {/* Top Bar Contract (Single row, 3 zones) */}
-      <TopBar
-        activeTab={activeTab}
-        setActiveTab={(tab) => {
-          setActiveTab(tab);
-          setShowFlutterCode(false);
-        }}
-        isDarkMode={isDarkMode}
-        setIsDarkMode={setIsDarkMode}
-        showFlutterCode={showFlutterCode}
-        setShowFlutterCode={setShowFlutterCode}
-        deviceMode={deviceMode}
-        setDeviceMode={setDeviceMode}
-        onOpenFilter={() => setIsFilterOpen(true)}
-        matchesCount={totalUnreadCount}
-        notificationsCount={unreadNotifsCount}
-        onOpenNotifications={() => setIsNotificationsOpen(true)}
-      />
-
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col">
+      <main className="flex-1 flex flex-col items-center justify-center">
         {showFlutterCode ? (
           <div className="max-w-7xl mx-auto w-full p-4 sm:p-6 flex-1 flex flex-col">
-            <FlutterCodeViewer />
+            <FlutterCodeViewer onClose={() => setShowFlutterCode(false)} />
           </div>
         ) : (
-          <DeviceFrame deviceMode={deviceMode}>
+          <DeviceFrame
+            deviceMode={deviceMode}
+            onToggleDeviceMode={() =>
+              setDeviceMode((prev) => (prev === 'mobile' ? 'pixel' : 'mobile'))
+            }
+          >
             {/* Screen View Container */}
             <div className="relative flex-1 flex flex-col h-full overflow-hidden bg-stone-50 dark:bg-stone-900">
+              {/* In-App Header: Logo on left, Notification Bar opposite the logo on the right */}
+              {activeThreadId === null && (
+                <header className="shrink-0 h-14 px-4 bg-white/95 dark:bg-stone-900/95 backdrop-blur-md border-b border-stone-200/80 dark:border-stone-800 flex items-center justify-between z-20 select-none">
+                  {/* Left: Amora Brand Logo */}
+                  <button
+                    onClick={() => setActiveTab('swipe')}
+                    className="flex items-center gap-2 text-left focus:outline-none cursor-pointer group"
+                  >
+                    <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-rose-600 via-rose-500 to-amber-500 flex items-center justify-center text-white shadow-xs group-hover:scale-105 transition-transform">
+                      <Heart className="w-4 h-4 fill-white" />
+                    </div>
+                    <span className="font-serif-romance text-xl font-bold tracking-tight text-stone-900 dark:text-white">
+                      Amora
+                    </span>
+                  </button>
+
+                  {/* Right (Opposite the Logo): Notification Bar & Filters */}
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => setIsFilterOpen(true)}
+                      className="p-2 rounded-xl text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-white hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors cursor-pointer"
+                      title="Dating Preferences"
+                      aria-label="Filter dating preferences"
+                    >
+                      <SlidersHorizontal className="w-5 h-5" />
+                    </button>
+
+                    <button
+                      onClick={() => setIsNotificationsOpen(true)}
+                      className="relative p-2 rounded-xl text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-white hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors cursor-pointer"
+                      title="Notifications"
+                      aria-label="View notifications"
+                    >
+                      <Bell className="w-5 h-5" />
+                      {unreadNotifsCount > 0 && (
+                        <span className="absolute top-1 right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center shadow-xs ring-2 ring-white dark:ring-stone-900 animate-pulse">
+                          {unreadNotifsCount}
+                        </span>
+                      )}
+                    </button>
+                  </div>
+                </header>
+              )}
+
               {/* Tab View Switcher */}
               <div className="flex-1 flex flex-col overflow-hidden">
                 {activeTab === 'swipe' && (
@@ -521,6 +552,7 @@ export default function App() {
                         setExplainingProfile(rankedProfiles[0]);
                       }
                     }}
+                    onViewFlutterCode={() => setShowFlutterCode(true)}
                   />
                 )}
               </div>

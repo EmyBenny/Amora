@@ -14,6 +14,7 @@ import {
   LogOut,
   Sparkles,
   ShieldCheck,
+  Code2,
 } from 'lucide-react';
 import { EditableUserProfile } from './EditProfileModal';
 
@@ -29,6 +30,7 @@ interface UserProfileViewProps {
   onOpenAuth: () => void;
   onSignOut: () => void;
   onOpenAlgorithm: () => void;
+  onViewFlutterCode?: () => void;
 }
 
 export const UserProfileView: React.FC<UserProfileViewProps> = ({
@@ -43,6 +45,7 @@ export const UserProfileView: React.FC<UserProfileViewProps> = ({
   onOpenAuth,
   onSignOut,
   onOpenAlgorithm,
+  onViewFlutterCode,
 }) => {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [incognito, setIncognito] = useState(false);
@@ -284,6 +287,27 @@ export const UserProfileView: React.FC<UserProfileViewProps> = ({
               <div className="w-4 h-4 rounded-full bg-white shadow-xs" />
             </button>
           </div>
+
+          {/* Flutter & Dart Source Code Viewer */}
+          {onViewFlutterCode && (
+            <button
+              onClick={onViewFlutterCode}
+              className="w-full p-3.5 flex items-center justify-between text-left hover:bg-stone-50 dark:hover:bg-stone-800 transition-colors text-stone-800 dark:text-stone-200 cursor-pointer"
+            >
+              <div className="flex items-center gap-3">
+                <Code2 className="w-4 h-4 text-stone-400" />
+                <div>
+                  <div className="text-xs font-semibold text-stone-900 dark:text-white">
+                    Flutter & Dart Architecture Source
+                  </div>
+                  <div className="text-[11px] text-stone-400">
+                    Review Flutter architecture, tests & services
+                  </div>
+                </div>
+              </div>
+              <span className="text-xs font-semibold text-rose-600">View Source</span>
+            </button>
+          )}
 
           {/* Auth Action Row */}
           {loggedInUser ? (

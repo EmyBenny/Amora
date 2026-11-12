@@ -2,7 +2,11 @@ import React, { useState } from 'react';
 import { Copy, Check, FileCode, Terminal, Download, Sparkles } from 'lucide-react';
 import { FLUTTER_CODEBASE, FlutterCodeFile } from '../data/flutterCode';
 
-export const FlutterCodeViewer: React.FC = () => {
+interface FlutterCodeViewerProps {
+  onClose?: () => void;
+}
+
+export const FlutterCodeViewer: React.FC<FlutterCodeViewerProps> = ({ onClose }) => {
   const [selectedFileIndex, setSelectedFileIndex] = useState<number>(1); // Default to main.dart
   const [copied, setCopied] = useState<boolean>(false);
 
@@ -42,16 +46,24 @@ export const FlutterCodeViewer: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="py-1.5 px-3 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs font-medium transition-colors flex items-center gap-1.5 border border-stone-700 cursor-pointer"
+            >
+              <span>← Back to App</span>
+            </button>
+          )}
           <button
             onClick={handleDownload}
-            className="py-1.5 px-3 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs font-medium transition-colors flex items-center gap-1.5 border border-stone-700"
+            className="py-1.5 px-3 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs font-medium transition-colors flex items-center gap-1.5 border border-stone-700 cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Download File</span>
           </button>
           <button
             onClick={handleCopy}
-            className="py-1.5 px-3 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-xs"
+            className="py-1.5 px-3 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
           >
             {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
             <span>{copied ? 'Copied to Clipboard!' : 'Copy Dart Code'}</span>
